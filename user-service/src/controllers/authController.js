@@ -331,7 +331,8 @@ const addOrganizationUser = async (req, res) => {
       const result = await userServices.updateUser(req.params.id, req.body);
       return res.status(200).send({
         success: true,
-        message: result.message,
+        message: "successfully updated user",
+        data:result
       });
     } catch (error) {
       console.error("Error updating user:", error);

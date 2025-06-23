@@ -519,7 +519,7 @@ const addOrganizationUser = async (userData) => {
   
     const orgUserResult = await pool.query(userQueries.GET_ORG_USER_BY_ID, [id]);
     if (orgUserResult.rows.length > 0) {
-      const existingUser = result.rows[0];
+      const existingUser = orgUserResult.rows[0];
       if (password && (await bcrypt.compare(password, existingUser.password)))
         throw new Error("New password cannot be same as the old password");
   

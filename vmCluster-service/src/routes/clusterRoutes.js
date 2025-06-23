@@ -11,7 +11,15 @@ const {
     deleteDatacenterLab,
     updateSingleVMDatacenterLab,
     updateUserVM,
-    updateUserVMWithProtocol
+    updateUserVMWithProtocol,
+    vmclusterDatacenterLabOrgAssignment,
+    getAllTheOrganizationLabs,
+    assignLabToUser,
+    getUserAssignedDatacenterLabs,
+    getVMClusterDatacenterlabOnLabId,
+    gerUserCredentialsForUser,
+    deleteDatacenterLabFromOrg,
+    deleteDatacenterLabOfUser
 } = require('../controller/clusterController');
 
 const uploadDir = path.join(__dirname, '../public/uploads/');
@@ -40,6 +48,14 @@ router.post('/updateClusterLab',upload.fields([
     {'name':'labGuide' , maxCount:5}
 ]),updateSingleVMDatacenterLab)
 router.post('/updateClusterVmCredentials',updateUserVM);
-router.post('/editClusterVmCredentials',updateUserVMWithProtocol)
+router.post('/editClusterVmCredentials',updateUserVMWithProtocol);
+router.post('/assignToOrganization',vmclusterDatacenterLabOrgAssignment);
+router.post('/getOrglabs',getAllTheOrganizationLabs);
+router.post('/assignCluster',assignLabToUser);
+router.post('/getUserAssignedClusterLabs/:userId',getUserAssignedDatacenterLabs);
+router.post('/getClusterLabOnId',getVMClusterDatacenterlabOnLabId);
+router.post('/getUserAssignedClusterCredsToUser',gerUserCredentialsForUser);
+router.post('/deleteFromOrganization',deleteDatacenterLabFromOrg);
+router.post('/deleteClusterLab',deleteDatacenterLabOfUser)
 
 module.exports = router;

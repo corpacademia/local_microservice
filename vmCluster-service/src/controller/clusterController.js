@@ -55,14 +55,52 @@ const createVMClusterDatacenterLab = async(req,res)=>{
 }
 
 //get all labs of user
-const getVMClusterDatacenterlab = async(req,res)=>{
+const getVMClusterDatacenterlab = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).send({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    const result = await clusterService.getVMClusterDatacenterlab(userId);
+
+    if (!result || result.length === 0) {
+      return res.status(200).send({
+        success: true,
+        message: "No labs found for the user",
+        data: [],
+      });
+    }
+
+    return res.status(200).send({
+      success: true,
+      message: "Successfully accessed the labs",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error in getVMClusterDatacenterlab:", error);
+    return res.status(500).send({
+      success: false,
+      message: "Internal server error while fetching labs",
+      error: error.message,
+    });
+  }
+};
+
+
+//get datacenter lab by labId
+const getVMClusterDatacenterlabOnLabId = async(req,res)=>{
     try {
-        const {userId} = req.body;
-        const result = await clusterService.getVMClusterDatacenterlab(userId);
+        const {labId} = req.body;
+        const result = await clusterService.getVMClusterDatacenterlabOnLabId(labId);
         if(!result){
             return res.status(400).send({
                 success:false,
-                message:"No labs found for the user"
+                message:"No labs found for the labid"
             })
         }
         return res.status(200).send({
@@ -185,11 +223,202 @@ const updateUserVMWithProtocol = async(req,res)=>{
     }
 }
 
+const vmclusterDatacenterLabOrgAssignment = async (req,res)=>{
+    try {
+        const data  = req.body;
+        const result =  await clusterService.vmclusterDatacenterLabOrgAssignment(data);
+        if(!result){
+            return res.status(400).send({
+                success:false,
+                message:"Could nor assign the vmclusterdatacenter lab to organization"
+            })
+        }
+        return res.status(200).send({
+           success:true,
+           message:"Successfully assigned lab to organization",
+           data:result
+        })
+    } catch (error) {
+        console.log('Error in assigning lab to organization'+error.message);
+        return res.status(500).send({
+            success:false,
+            message:"Error in assigning vmcluster datacenter lab to organization",
+            error:error.message
+        })
+    }
+}
+
+//get all the organization labs
+const getAllTheOrganizationLabs = async(req,res)=>{
+    try {
+        const {orgId} = req.body;
+        const orgLabs = await clusterService.getAllTheOrganizationLabs(orgId);
+        if(!orgLabs){
+            return res.status(404).send({
+                success:false,
+                message:"No labs found for the organization"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the organization labs",
+            data:orgLabs
+        })
+    } catch (error) {
+        console.log("Error in getting organization labs:"+error);
+        return res.status(500).send({
+            success:false,
+            messsage:"Error in getting the organization labs",
+            error:error.message
+        })
+    }
+}
+
+//assign the labs to user
+const assignLabToUser = async(req,res)=>{
+    try {
+        console.log(req.body)
+        const {labId, userId, assignedBy, startDate, endDate,orgId} = req.body;
+        const result = await clusterService.assignLabToUser(labId, userId, assignedBy, startDate, endDate,orgId);
+        if(!result){
+            return res.status(400).send({
+                success:false,
+                message:"Could not assign the lab to user"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully assigned the lab to user",
+            data:result
+        })
+    } catch (error) {
+        console.log("Error in assigning lab to user:", error.message);
+        return res.status(500).send({
+            success:false,
+            message:"Error in assigning lab to user",
+            error:error.message
+        })
+    }
+}
+
+//get user assigned datancenter labs
+const getUserAssignedDatacenterLabs = async(req,res)=>{
+    try {
+        const {userId} = req.params;
+        const result = await clusterService.getUserAssignedDatacenterLabs(userId);
+        if(!result){
+            return res.status(404).send({
+                success:false,
+                message:"No labs found for the user"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the user assigned labs",
+            data:result
+        })
+    } catch (error) {
+        console.log("Error in getting user assigned datacenter labs:", error.message);
+        return res.status(500).send({
+            success:false,
+            message:"Error in getting user assigned datacenter labs",
+            error:error.message
+        })
+    }
+}
+
+//get user assigned credentials
+const gerUserCredentialsForUser = async(req,res)=>{
+    try {
+        const {labId,userId} = req.body;
+        const result = await clusterService.gerUserCredentialsForUser(labId,userId);
+        if(!result){
+            return res.status(404).send({
+                success:false,
+                message:"No user credentials found for the lab"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the user credentials",
+            data:result
+        })
+    } catch (error) {
+        console.log("Error in getting user credentials for user:", error);
+        return res.status(500).send({
+            success:false,
+            message:"Error in getting user credentials for user",
+            error:error.message
+        })
+    }
+}
+
+//delete datacenter lab from organization
+const deleteDatacenterLabFromOrg = async(req,res)=>{
+    try {
+        const {labId,orgId,adminId} = req.body;
+        const result = await clusterService.deleteDatacenterLabFromOrg(labId,orgId,adminId);
+        if(!result){
+            return res.status(400).send({
+                success:false,
+                message:"Could not delete the datacenter lab from organization"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully deleted the datacenter lab from organization",
+            data:result
+        })
+    } catch (error) {
+        console.log("Error in deleting datacenter lab from organization:", error.message);
+        return res.status(500).send({
+            success:false,
+            message:"Error in deleting datacenter lab from organization",
+            error:error.message
+        })
+    }
+}
+
+//delete datacenter lab of user
+const deleteDatacenterLabOfUser = async(req,res)=>{
+    try {
+        const {labId,orgId,userId} = req.body;
+        const result = await clusterService.deleteDatacenterLabOfUser(labId,orgId,userId);
+        if(!result){
+            return res.status(400).send({
+                success:false,
+                message:"Could not delete the datacenter lab of user"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully deleted the datacenter lab of user",
+            data:[]
+        })
+    } catch (error) {
+        console.log("Error in deleting datacenter lab of user:", error.message);
+        return res.status(500).send({
+            success:false,
+            message:"Error in deleting datacenter lab of user",
+            error:error.message
+        })
+        
+    }
+}
+
 module.exports = {
     createVMClusterDatacenterLab,
     getVMClusterDatacenterlab,
     deleteDatacenterLab,
     updateSingleVMDatacenterLab,
     updateUserVM,
-    updateUserVMWithProtocol
+    updateUserVMWithProtocol,
+    vmclusterDatacenterLabOrgAssignment,
+    getAllTheOrganizationLabs,
+    assignLabToUser,
+    getUserAssignedDatacenterLabs,
+    getVMClusterDatacenterlabOnLabId,
+    gerUserCredentialsForUser,
+    deleteDatacenterLabFromOrg,
+    deleteDatacenterLabOfUser
 }
