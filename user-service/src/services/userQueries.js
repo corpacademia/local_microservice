@@ -40,7 +40,8 @@ module.exports = {
             WHERE org_id = $1
         `,
     UPDATE_USER_ROLE:`update users set role = $1 where id = $2 returning *`,
-    
+    UPDATE_ORG_USER_ROLE:`update organization_users set role = $1 where id = $2 returning *`,
+
     DELETE_USERS:`
           DELETE FROM users 
           WHERE id = ANY($1) AND org_id = $2

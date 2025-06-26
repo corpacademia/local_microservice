@@ -277,7 +277,6 @@ const getAllTheOrganizationLabs = async(req,res)=>{
 //assign the labs to user
 const assignLabToUser = async(req,res)=>{
     try {
-        console.log(req.body)
         const {labId, userId, assignedBy, startDate, endDate,orgId} = req.body;
         const result = await clusterService.assignLabToUser(labId, userId, assignedBy, startDate, endDate,orgId);
         if(!result){

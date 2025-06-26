@@ -1,7 +1,10 @@
 const cloudSliceAwsQueries = require('./cloudSliceQueries');
+const {LabAssignmentError} = require('../utils/errors.js');
 
 const pool= require('../db/dbconfig');
-const e = require('express');
+const express = require('express');
+
+
 
 //function to get the files path with matching name
 function getMatchingFilePaths(filePaths, files) {
@@ -694,14 +697,17 @@ const cloudSliceLabOrgAssignment = async(labId,organizationId,userId,isPublic)=>
         if(organizationId === 'none'){
              return true
         }
+        const checkOrgAssignment = await pool.query(cloudSliceAwsQueries.CHECK_LAB_EXISTS,[organizationId,labId]);
+        if (checkOrgAssignment.rows.length) {
+           throw new LabAssignmentError("Lab already assigned", checkOrgAssignment.rows[0]);
+        }
         const result = await pool.query(cloudSliceAwsQueries.INSERT_ORG_ASSIGNMENT,[labId,organizationId,userId]);
         if (!result.rows.length) {
             throw new Error('No lab found with this id');
         }
         return result.rows[0];
     } catch (error) {
-        console.log(error);
-        throw new Error('Error in cloudSliceLabOrgAssignment function', error);
+        throw error;
         
     }
 }
@@ -710,9 +716,7 @@ const cloudSliceLabOrgAssignment = async(labId,organizationId,userId,isPublic)=>
 const getAllLabsFromOrgAssignment = async(organizationId)=>{
     try {
         const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT,[organizationId]);
-        if (!result.rows.length) {
-            throw new Error('No lab found with this id');
-        }
+       
         return result.rows;
     } catch (error) {
         console.log(error);

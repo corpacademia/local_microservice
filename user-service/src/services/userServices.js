@@ -19,12 +19,25 @@ const signupService = async (name, email, password,organization,isNewOrganizatio
     }
         const hashedPassword = await hashPassword(password);
         let result;
-        if(!isNewOrganization || organization.org_admin !== null){
-             result = await pool.query(userQueries.insertUserQuery, [name, email, hashedPassword,organization.org_admin,organization.organization_name,organization.org_type,organization.id]);
-        }
-        else{
-           result = await pool.query(userQueries.insertAdminUserQuery,[name,email,hashedPassword,organization.organization_name,organization.org_type,'orgadmin',organization.id])
-        }
+        if (!isNewOrganization) {
+    if (!organization) {
+          result = await pool.query(userQueries.insertAdminUserQuery,[name, email, hashedPassword, null, null, null, null])
+      // optionally handle or throw
+    } else if (organization.org_admin !== null) {
+      // Regular user being added to an existing org
+      result = await pool.query(
+        userQueries.insertUserQuery,
+        [name, email, hashedPassword, organization.org_admin, organization.organization_name, organization.org_type, organization.id]
+      );
+    }
+  } else {
+    // New organization — insert the admin user
+    result = await pool.query(
+      userQueries.insertAdminUserQuery,
+      [name, email, hashedPassword, organization.organization_name, organization.org_type, 'orgadmin', organization.id]
+    );
+  }
+
               
 
         // 3. Prepare email HTML
@@ -280,14 +293,27 @@ const updateUserOrganization = async (userId, values) => {
 
 
 const updateUserRole = async (userId, role) => {
-    if (!userId || !role) throw new Error("User ID or role is missing");
-  
+  if (!userId || !role) {
+    throw new Error("User ID and role are required");
+  }
+
+  // Check if the user exists in the main users table
+  const existingUser = await pool.query(userQueries.getUserById, [userId]);
+  if (existingUser.rows.length > 0) {
     const result = await pool.query(userQueries.UPDATE_USER_ROLE, [role, userId]);
-  
-    if (!result.rows[0]) throw new Error("Invalid User ID or role");
-  
     return result.rows[0];
-  };
+  }
+
+  // If not found, check in organization_users
+  const existingOrgUser = await pool.query(userQueries.getOrgUserById, [userId]);
+  if (existingOrgUser.rows.length > 0) {
+    const result = await pool.query(userQueries.UPDATE_ORG_USER_ROLE, [role, userId]);
+    return result.rows[0];
+  }
+
+  throw new Error("User not found in either users or organization_users table");
+};
+
   
   const getTokenAndGetUserDetails = async (token) => {
     if (!token) throw new Error("No token provided");

@@ -1,5 +1,7 @@
-const { json } = require('body-parser');
+
 const cloudSliceAwsService = require('../services/cloudSliceAwsService');
+
+const {LabAssignmentError} = require('../utils/errors');
 
 const getAllAwsServices = async(req,res)=>{
     try {
@@ -739,7 +741,6 @@ const updateCloudSliceLab = async(req,res)=>{
 const cloudSliceOrgAssignment = async(req,res)=>{
     try {
         const {sliceId,organizationId,userId,isPublic} = req.body;
-        console.log(sliceId ,organizationId ,isPublic ,userId)
         if(!sliceId || !organizationId  || !userId){
             return res.status(400).send({
                 success:false,
@@ -759,7 +760,14 @@ const cloudSliceOrgAssignment = async(req,res)=>{
             data:result
         })
     } catch (error) {
-        console.log(error);
+        // console.log(error)
+        if (error instanceof LabAssignmentError) {
+        return res.status(409).send({
+        success: false,
+        message: error.message,
+        error: error.data
+        });
+    }
         return res.status(500).send({
             success:false,
             message:"Internal server error",
@@ -781,8 +789,9 @@ const getCloudSliceLabAssignedToOrg = async(req,res)=>{
         const result = await cloudSliceAwsService.getAllLabsFromOrgAssignment(orgId);
         if(!result){
             return res.status(404).send({
-                success:false,
-                message:"No cloud slice lab found with this id"
+                success:success,
+                message:"No labs assigned to this organization",
+                data:[]
             })
         }
         return res.status(200).send({

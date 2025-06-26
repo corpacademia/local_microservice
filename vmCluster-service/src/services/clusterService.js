@@ -397,6 +397,7 @@ const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate,or
         clusterQueries.UPDATE_USER_GROUP_CREDS_TO_USER,
         [userId, labId, orgId]
       );
+      console.log("Group Creds ID to User:", groupCredsIdToUser.rows);
       if(!groupCredsIdToUser.rows.length) {
         throw new Error(`Could not assign user group creds for user ${userId}`);
       }

@@ -24,6 +24,7 @@ module.exports = {
 
     GET_ALL_LABS_ON_CREATED_USER:`SELECT * FROM cloudslicelab where createdby = $1`,
     GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT:`SELECT * FROM cloudsliceorgassignment where orgid = $1`,
+    CHECK_LAB_EXISTS:`SELECT * FROM cloudsliceorgassignment where orgid = $1 AND labid = $2`,
     GET_LABS_ON_ID:`SELECT * FROM cloudslicelab where labid = $1`,
     GET_ALL_CLOUDSLICE_LABS:`SELECT * FROM cloudslicelab`,
     GET_USER_ASSIGNED_LABS:`SELECT * FROM cloudsliceuserassignment where user_id = $1`,

@@ -19,8 +19,7 @@ dotenv.config();
 const signupController = async (req, res) => {
     try {
         const { name, email, password , organization,isNewOrganization } = req.body;
-        console.log(req.body)
-        if(!name|| !email || !password || !organization ){
+        if(!name|| !email || !password  ){
           return res.status(404).send({
             success:false,
             message:"Please Provide All the required fields"
@@ -219,8 +218,12 @@ const updateUserRole = async (req, res) => {
     try {
       const { userId, role } = req.body;
       const updatedUser = await userServices.updateUserRole(userId, role);
+      if (!updatedUser) {
+        return res.status(404).send({ success: false, message: "User not found" });
+      }
       res.status(200).send({ success: true, message: "User role updated", data: updatedUser });
     } catch (error) {
+      console.log("error", error);
       res.status(400).send({ success: false, message: error.message });
     }
   };
