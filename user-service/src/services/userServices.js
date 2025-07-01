@@ -573,6 +573,64 @@ const addOrganizationUser = async (userData) => {
     }
   };
 
+  //update user profile
+  const updateUserProfile = async ( id, name, email, password, phone, location, profilephoto) => {
+  try {
+    if (!id || !name || !email) {
+      throw new Error("Please provide the required fields");
+    }
+
+    const userResult = await pool.query(userQueries.GET_USER_BY_ID, [id]);
+    if (userResult.rows.length > 0) {
+      const existingUser = userResult.rows[0];
+
+      // Use existing profile photo if none provided
+      const finalProfilePhoto = profilephoto ?? existingUser.profilephoto;
+
+      if (password && (await bcrypt.compare(password, existingUser.password))) {
+        throw new Error("New password cannot be same as the old password");
+      }
+
+      const query = password
+        ? userQueries.updateUserProfile
+        : userQueries.updateUserProfileWithNoPassword;
+      const values = password
+        ? [name, email, await bcrypt.hash(password, 10), phone, location, finalProfilePhoto, id]
+        : [name, email, phone, location, finalProfilePhoto, id];
+
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    }
+
+    // If not found in users table, check organization_users
+    const orgUserResult = await pool.query(userQueries.GET_ORG_USER_BY_ID, [id]);
+    if (orgUserResult.rows.length > 0) {
+      const existingUser = orgUserResult.rows[0];
+      const finalProfilePhoto = profilephoto ?? existingUser.profilephoto;
+
+      if (password && (await bcrypt.compare(password, existingUser.password))) {
+        throw new Error("New password cannot be same as the old password");
+      }
+
+      const query = password
+        ? userQueries.updateUserProfileOrg
+        : userQueries.updateUserProfileWithNoPasswordOrg;
+      const values = password
+        ? [name, email, await bcrypt.hash(password, 10), phone, location, finalProfilePhoto, id]
+        : [name, email, phone, location, finalProfilePhoto, id];
+
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    }
+
+    throw new Error("User not found");
+  } catch (error) {
+    console.log(error);
+    throw error;
+  }
+};
+
+
 module.exports = { 
     signupService,
     loginService,
@@ -591,4 +649,5 @@ module.exports = {
   insertUsers,
   logoutService,
   deleteRandomUsers,
+  updateUserProfile
  };

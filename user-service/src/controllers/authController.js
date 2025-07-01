@@ -364,6 +364,33 @@ const addOrganizationUser = async (req, res) => {
     }
   };
   
+  // Controller: Update User Profile
+  const updateUserProfile = async (req, res) => {
+    try {
+      const {id , name, email, password, phone, location } = req.body;
+      const profilePhoto = req.files[0] ? req.files[0].path : null;
+      const updatedUser = await userServices.updateUserProfile(id, name, email, password, phone, location, profilePhoto);
+      if (!updatedUser) {
+        return res.status(404).send({
+          success: true,
+          message: "User not found",
+          data:[]
+        });
+      }
+      return res.status(200).send({
+        success: true,
+        message: "Successfully updated user profile",
+        data: updatedUser,
+      });
+    } catch (error) {
+      console.error("Error updating user profile:", error.message);
+      return res.status(500).send({
+        success: false,
+        message: "Could not update user profile",
+        error: error.message,
+      });
+    }
+   }
 
 module.exports={
     signupController,
@@ -383,5 +410,6 @@ module.exports={
     getOrganizationUser,
     updateUser,
     insertUsers,
-    deleteRandomUsers
+    deleteRandomUsers,
+    updateUserProfile
 }

@@ -1,3 +1,5 @@
+const { updateUser } = require("./userServices");
+
 module.exports = {
     insertUserQuery : `INSERT INTO organization_users (name, email, password,admin_id,organization,organization_type,org_id) VALUES ($1, $2, $3,$4,$5,$6,$7) RETURNING *`,
     insertAdminUserQuery : `INSERT INTO users (name, email, password,organization,organization_type,role,org_id) VALUES ($1, $2, $3,$4,$5,$6,$7) RETURNING *`,
@@ -19,6 +21,17 @@ module.exports = {
     getUserCertifications: 'SELECT CertificationName FROM Certifications WHERE UserId = $1',
     updateUserOrganizationOfOrg: 'UPDATE organization_users SET organization = $1, organization_type = $2,org_id=$3 WHERE id = $4 RETURNING *',
     updateUserOrganizationDetails: 'UPDATE users SET organization = $1, organization_type = $2, org_id=$3 WHERE id = $4 RETURNING *',
+    
+    //update the user profile
+    updateUserProfile: `UPDATE users SET name = $1, email = $2, password = $3, phone = $4, location = $5 ,profilephoto = $6 WHERE id = $7 RETURNING *`,
+    updateUserProfileWithNoPassword: `UPDATE users SET name = $1, email = $2, phone = $3, location = $4 ,profilephoto = $5 WHERE id = $6 RETURNING *`,
+
+    updateUserProfileOrg: `UPDATE organization_users SET name = $1, email = $2, password = $3, phone = $4, location = $5 ,profilephoto = $6 WHERE id = $7 RETURNING *`,
+    updateUserProfileWithNoPasswordOrg: `UPDATE organization_users SET name = $1, email = $2, phone = $3, location = $4 ,profilephoto = $5 WHERE id = $6 RETURNING *`,
+    // updateUserProfileNoProfilePhotoOrg: `UPDATE organization_users SET name = $1, email = $2, password=$3, phone = $4, location = $5 WHERE id = $6 RETURNING *`,
+
+
+
     ADD_ORG_USER: `INSERT INTO organization_users(name, email, password, role, admin_id,organization,org_id,organization_type) VALUES($1, $2, $3, $4, $5,$6,$7,$8) RETURNING *`,
     GET_ORG_USERS: `SELECT * FROM organization_users WHERE admin_id=$1`,
     UPDATE_USER: `UPDATE users SET name=$1, email=$2,password=$3,status=$4, role=$5  WHERE id=$6`,

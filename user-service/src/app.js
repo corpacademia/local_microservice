@@ -23,6 +23,7 @@ app.use(cors({
 
 
 //routes
+app.use('/uploads', express.static('public/uploads'));
 app.use('/',authRouter);
 
 module.exports = app;
