@@ -248,6 +248,26 @@ const vmclusterDatacenterLabOrgAssignment = async (req,res)=>{
     }
 }
 
+//get the vm cluster datacenter lab details
+const getVMClusterDatacenterlabDetails = async(req,res)=>{
+    try {
+        const {userId} = req.body;
+        const result = await clusterService.getVMClusterDatacenterlabDetails(userId);
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the vm cluster datacenter lab details",
+            data:result
+        })
+    } catch (error) {
+        console.log("Error in getting vm cluster datacenter lab details:", error.message);
+        return res.status(500).send({
+            success:false,
+            message:"Error in getting vm cluster datacenter lab details",
+            error:error.message
+        })
+    }
+}                 
+
 //get all the organization labs
 const getAllTheOrganizationLabs = async(req,res)=>{
     try {
@@ -419,5 +439,6 @@ module.exports = {
     getVMClusterDatacenterlabOnLabId,
     gerUserCredentialsForUser,
     deleteDatacenterLabFromOrg,
-    deleteDatacenterLabOfUser
+    deleteDatacenterLabOfUser,
+    getVMClusterDatacenterlabDetails
 }

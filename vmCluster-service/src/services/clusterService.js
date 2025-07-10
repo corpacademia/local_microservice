@@ -6,7 +6,7 @@ const createVMClusterDatacenterLab = async (data, userId) => {
   try {
     const { details, type, platform, labGuides, userGuides, clusterConfig } = data;
     const { startDate, startTime, endDate, endTime, vms, users } = clusterConfig;
-    const { title, description } = details;
+    const { title, description,guacamole } = details;
     // Validation
     if (!title || !description || !type || !platform || !labGuides || !userGuides || !startDate || !endDate) {
       throw new Error("Please provide all the required fields");
@@ -21,7 +21,9 @@ const createVMClusterDatacenterLab = async (data, userId) => {
       labGuides,
       userGuides,
       `${startDate} ${startTime}`,
-      `${endDate} ${endTime}`
+      `${endDate} ${endTime}`,
+      guacamole.name,
+      guacamole.url
     ]);
 
     if (!result.rows.length) {
@@ -129,6 +131,25 @@ const getVMClusterDatacenterlab = async (userId) => {
   }
 };
 
+//get the vm cluster datacenter lab details
+const getVMClusterDatacenterlabDetails = async (userId) => {
+  try {
+    if (!userId) {
+      throw new Error("Please provide the user id");
+    }
+    const labDetails = await pool.query(clusterQueries.GET_ALL_LABS_ON_USERID, [userId]);
+
+    if (!labDetails.rows.length) {
+      return [];
+    }
+
+    return labDetails.rows;
+  } catch (error) {
+    console.error("Error in getting VM cluster datacenter lab details:", error);
+    throw new Error("Error in getting VM cluster datacenter lab details: " + error.message);
+    
+  }
+}
 
 //get the lab details on labId
 const getVMClusterDatacenterlabOnLabId = async (labId) => {
@@ -294,7 +315,7 @@ const vmclusterDatacenterLabOrgAssignment = async (data) => {
     let { labId, orgId, assignedBy, software, catalogueType, catalogueName } = data;
     software = software.length > 0 ? software : null;
 
-    if (!labId || !orgId || !assignedBy || !software || !catalogueType || !catalogueName) {
+    if (!labId || !orgId || !assignedBy  || !catalogueType || !catalogueName) {
       throw new Error("Please provide all required fields");
     }
 
@@ -382,8 +403,9 @@ const getAllTheOrganizationLabs = async (orgId)=>{
 }
 
 //ASSIGN LABS TO USERS
-const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate,orgId) => {
+const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate, orgId) => {
   try {
+    console.log(labId, userIds, assignedBy, startDate, endDate, orgId)
     if (!labId || !userIds || !assignedBy || !startDate || !endDate) {
       throw new Error("Please provide all required fields");
     }
@@ -391,16 +413,27 @@ const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate,or
     const client = await pool.connect();
     await client.query('BEGIN');
 
-    // Insert user assignments
-    for (const userId of userIds) {
-       const groupCredsIdToUser = await client.query(
-        clusterQueries.UPDATE_USER_GROUP_CREDS_TO_USER,
-        [userId, labId, orgId]
-      );
-      console.log("Group Creds ID to User:", groupCredsIdToUser.rows);
-      if(!groupCredsIdToUser.rows.length) {
+    const userIdArray = Array.isArray(userIds) ? userIds : [userIds];
+
+    for (const userId of userIdArray) {
+      let groupCredsIdToUser;
+
+      if (orgId === null) {
+        groupCredsIdToUser = await client.query(
+          clusterQueries.UPDATE_USER_GROUP_CREDS_TO_RANDOM_USER,
+          [userId, labId]
+        );
+      } else {
+        groupCredsIdToUser = await client.query(
+          clusterQueries.UPDATE_USER_GROUP_CREDS_TO_USER,
+          [userId, labId, orgId]
+        );
+      }
+      console.log(groupCredsIdToUser)
+      if (!groupCredsIdToUser.rows.length) {
         throw new Error(`Could not assign user group creds for user ${userId}`);
       }
+
       const result = await client.query(clusterQueries.INSERT_INTO_USERASSIGNMENT, [
         labId,
         userId,
@@ -409,22 +442,22 @@ const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate,or
         endDate,
         groupCredsIdToUser.rows[0].id,
       ]);
+
       if (!result.rows.length) {
         throw new Error(`Could not assign lab ${labId} to user ${userId}`);
       }
-     
     }
 
     await client.query('COMMIT');
     client.release();
-    
     return true;
+
   } catch (error) {
     console.error("Error in assigning lab to users:", error);
     throw new Error("Error in assigning lab to users: " + error.message);
-    
   }
 };
+
 
 //get user assigned datacenter labs
 const getUserAssignedDatacenterLabs = async (userId) => {
@@ -541,5 +574,6 @@ module.exports = {
     gerUserCredentialsForUser,
     gerUserCredentialsForUser,
     deleteDatacenterLabFromOrg,
-    deleteDatacenterLabOfUser
+    deleteDatacenterLabOfUser,
+    getVMClusterDatacenterlabDetails
 };

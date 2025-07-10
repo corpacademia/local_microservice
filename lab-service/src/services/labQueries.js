@@ -1,14 +1,14 @@
 module.exports = {
     CREATE_LAB :`
     INSERT INTO createlab 
-    (user_id,type,platform,provider,os,os_version,cpu,ram,storage,instance,title,description,duration,snapshot_type,labguide,userguide) 
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) 
+    (user_id,type,platform,provider,os,os_version,cpu,ram,storage,instance,title,description,duration,snapshot_type,labguide,userguide,guacamole_name,guacamole_url) 
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) 
     RETURNING *
     `,
     INSERT_DATACENTER_LAB:`
     INSERT INTO singlevmdatacenter_lab
-    ( user_id, title, description, type, platform,startdate,enddate, labguide, userguide ,protocol)
-    VALUES ($1, $2, $3, $4, $5,$6, $7,$8,$9,$10)
+    ( user_id, title, description, type, platform,startdate,enddate, labguide, userguide ,protocol,guacamole_name,guacamole_url)
+    VALUES ($1, $2, $3, $4, $5,$6, $7,$8,$9,$10,$11,$12)
     RETURNING *
     `,
     INSERT_DATACENTER_VM_CREDS:`INSERT INTO datacenter_lab_user_credentials (labid, username, password, ip, port, protocol)
@@ -47,10 +47,25 @@ FROM to_update
 WHERE d.id = to_update.id
 RETURNING d.*;
 ;
-`,
+    `,
+    UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER:`WITH to_update AS (
+  SELECT id
+  FROM datacenter_lab_user_credentials
+  WHERE labid = $2 AND orgassigned  is NULL and assigned_to is  NUll
+  LIMIT 1
+)
+UPDATE datacenter_lab_user_credentials AS d
+SET assigned_to = $1
+FROM to_update
+WHERE d.id = to_update.id
+RETURNING d.*;
+;
+    `,
+
 
     EDIT_SINGLEVM_DATACENTER_CREDS:`UPDATE datacenter_lab_user_credentials SET username=$1, password=$2, ip=$3, port=$4, protocol=$5 WHERE id=$6 AND labid=$7 RETURNING *`,
     GET_CONFIG_DETAILS: `SELECT config_details FROM lab_batch WHERE lab_id=$1 AND admin_id=$2`,
+    GET_CONFIG_DETAILS_RANDOM_USER: `SELECT config_details FROM lab_batch WHERE lab_id=$1 `,
     CHECK_ALREADY_ASSIGNED: `SELECT * FROM labassignments WHERE user_id=$1 AND lab_id=$2`,
     ASSIGN_LAB: `
         INSERT INTO labassignments (lab_id, user_id, completion_date, status, assigned_admin_id) 
@@ -111,18 +126,60 @@ CREATE_CATALOGUE: `
     GET_ASSIGNED_LABS_ON_LABID:"SELECT * from labassignments where lab_id=$1 and user_id=$2",
 UPDATE_LAB_STATUS: `UPDATE createlab SET status=$1 WHERE lab_id=$2 RETURNING *`,
 
-GET_COUNT:`SELECT json_object_agg(table_name, row_count) AS counts
+GET_COUNT: `
+SELECT json_object_agg(table_name, row_count) AS counts
 FROM (
-  SELECT 'workspace' AS table_name, COUNT(*) AS row_count FROM workspace where created_by=$1
+  SELECT 'workspace' AS table_name, COUNT(*) AS row_count FROM workspace WHERE created_by = $1
+
   UNION ALL
-  SELECT 'cloud-vm', COUNT(*) FROM createlab where user_id=$1
+
+  SELECT 'cloud-vm' AS table_name, COUNT(*) AS row_count
+  FROM (
+    SELECT lab_id FROM createlab WHERE user_id = $1
+    UNION ALL
+    SELECT lab_id FROM singlevmdatacenter_lab WHERE user_id = $1
+  ) AS combined
+
   UNION ALL
-  SELECT 'cloud-slice', COUNT(*) FROM cloudslicelab where createdby=$1
- 
+  select 'cluster' AS table_name, COUNT(*) AS row_count FROM vmclusterdatacenter_lab WHERE user_id = $1
+
+  UNION ALL
+  SELECT 'cloud-slice' AS table_name, COUNT(*) AS row_count FROM cloudslicelab WHERE createdby = $1
+) AS subquery;
+`,
+GET_ORG_LAB_COUNT: `
+SELECT json_object_agg(table_name, row_count) AS counts
+FROM (
+  SELECT 'workspace' AS table_name, COUNT(*) AS row_count 
+  FROM workspace 
+  WHERE created_by = $1
+
+  UNION ALL
+
+  SELECT 'cloud-vm' AS table_name, COUNT(*) AS row_count
+  FROM (
+    SELECT lab_id FROM labassignments WHERE user_id = $1
+    UNION ALL
+    SELECT labid FROM singlevmdatacenterorgassignment WHERE orgid = $2
+  ) AS combined
+
+  UNION ALL
+
+  SELECT 'cluster' AS table_name, COUNT(*) AS row_count 
+  FROM vmclusterdatacenterorgassignment 
+  WHERE orgid = $2
+
+  UNION ALL
+
+  SELECT 'cloud-slice' AS table_name, COUNT(*) AS row_count 
+  FROM cloudsliceorgassignment 
+  WHERE orgid = $2
 ) AS subquery;
 `,
 GET_ALL_CLOUDSLICE_LABS_ORG:`Select * from cloudsliceorgassignment where orgid=$1`,
 GET_CLOUDSLICE_LABS_LABID: `select * from cloudslicelab where labid=$1`,
+
+GET_SINGLE_VM_DATACENTER:`SELECT * FROM singlevmdatacenter_lab where user_id=$1`,
 
 DELETE_SINGLEVM_DATACENTER_LAB:`DELETE FROM singlevmdatacenter_lab where lab_id=$1`,
 DELETE_SINGLEVM_DATACENTER_CREDS:`DELETE FROM datacenter_lab_user_credentials where labid=$1`,

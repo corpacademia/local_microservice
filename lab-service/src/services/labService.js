@@ -58,7 +58,11 @@ const createLab=async(data,user)=>{
     try{
        const {type,details,platform,provider,config,instance,userGuides,
       labGuides} = data;
-       const output = await pool.query(queries.CREATE_LAB,[user.id,type,platform,provider,config.os,config.os_version,config.cpu,config.ram,config.storage,instance,details.title,details.description,details.duration,config.snapshotType,labGuides,userGuides]);
+       const output = await pool.query(queries.CREATE_LAB,[user.id,type,platform,provider,
+        config.os,config.os_version,config.cpu,
+        config.ram,config.storage,instance,details.title,
+        details.description,details.duration,config.snapshotType,
+        labGuides,userGuides,details.guacamole.name,details.guacamole.url]);
        
        return output.rows[0];
     }
@@ -72,7 +76,7 @@ const createLab=async(data,user)=>{
 const createSingleVmDatacenterLab = async (data, user) => {
     try {
         const { details, type, platform, labGuides, userGuides  } = data;
-        const { title, description } = details;
+        const { title, description,guacamole } = details;
         const { startDate, startTime, endDate, endTime,protocol,users } = data.datacenterConfig;
         const output = await pool.query(queries.INSERT_DATACENTER_LAB, [
             user,
@@ -84,7 +88,9 @@ const createSingleVmDatacenterLab = async (data, user) => {
             `${endDate} ${endTime}`,
             labGuides,
             userGuides,
-            protocol
+            protocol,
+            guacamole.name,
+            guacamole.url
         ]);
         if (!output.rows[0]) {
             throw new Error("Could not create the lab");    
@@ -296,15 +302,20 @@ const deleteSingleVmDatacenterLab = async (labId)=>{
 const assignSingleVmDatacenterLabToUser = async(data)=>{
     try {
         const {labId,orgId,userId,assignedBy,startDate,endDate}= data;
-    if(!labId || !userId||!assignedBy||!startDate||!endDate ||!orgId){
+    if(!labId || !userId||!assignedBy||!startDate||!endDate ){
         throw new Error("Please Provide the required fields");
     }
      const userIds = Array.isArray(userId) ? userId : [userId];
       
           const insertedRows = [];
           for (const user of userIds) {
-            const result = await pool.query( labQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT,[user,labId,orgId])
-            console.log(result.rows)
+            let result;
+            if(orgId === null){
+              result = await pool.query(labQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER,[user,labId])
+            }
+            else{
+                result = await pool.query( labQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT,[user,labId,orgId])
+            }
     if(!result.rows.length){
         throw new Error('No credential available to assign')
     }
@@ -324,6 +335,20 @@ const assignSingleVmDatacenterLabToUser = async(data)=>{
         throw new Error("Error in assigning the lab to user");
     }
     
+}
+
+//get all the single vm datacenter labs 
+const getAllSingleVMDatacenterLabs = async (id) => {
+    try {
+        const result = await pool.query(labQueries.GET_SINGLE_VM_DATACENTER,[id]);
+        if (!result.rows.length) {
+            return [];
+        }
+        return result.rows;
+    } catch (error) {
+        console.log(error);
+        throw new Error("Error in retrieving the single VM datacenter labs");
+    }
 }
 
 //
@@ -413,7 +438,7 @@ const assignLab = async (lab, userIds, assign_admin_id) => {
         // Normalize `userIds` to an array
         userIds = Array.isArray(userIds) ? userIds : [userIds];
         // Get configuration details
-        const getDays = await pool.query(labQueries.GET_CONFIG_DETAILS, [lab, assign_admin_id]);
+        const getDays = await pool.query(labQueries.GET_CONFIG_DETAILS_RANDOM_USER, [lab]);
         if (!getDays.rows.length) {
             throw new Error("Invalid lab ID");
         }
@@ -754,15 +779,25 @@ const getLabCatalogues = async () => {
  }
 
 //get count of labs
-const getCount = async (userId) => {
-    try {
-        const result = await pool.query(queries.GET_COUNT,[userId]);
-        return result.rows[0]; // Return the count of labs
-    } catch (error) {
-        console.error("Error in getCount service:", error.message);
-        throw error;
+const getCount = async (userId, user) => {
+  try {
+    let result;
+
+    if (user.role === 'superadmin') {
+      result = await pool.query(queries.GET_COUNT, [userId]);
+    } else if (user.role === 'orgadmin') {
+      result = await pool.query(queries.GET_ORG_LAB_COUNT, [userId,user.org_id]);
+    } else {
+      throw new Error("Invalid user role");
     }
+
+    return result.rows[0]; // Return the count of labs
+  } catch (error) {
+    console.error("Error in getCount service:", error.message);
+    throw error;
+  }
 };
+
 
 //get cloudslicelabs of organization assigned
 const getCloudSliceOrgLabs = async (orgId) => {
@@ -835,5 +870,6 @@ module.exports = {
     updateSingleVMDatacenterUserCredRunningState,
     deleteSingleVMDatacenterLabForUser,
     deleteSingleVMDatacenterLabFromOrg,
-    updateSingleVMDatacenterLab
+    updateSingleVMDatacenterLab,
+    getAllSingleVMDatacenterLabs
 }

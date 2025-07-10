@@ -36,7 +36,7 @@ const getAllAwsServices = async () => {
 
 const createCloudSliceLab = async (createdBy,labData) => {
     const { services, region, startDate, endDate, cleanupPolicy, platform, cloudProvider, title, description, labType, credits,accountType } = labData;
-   
+
     if (!services || !region || !startDate || !endDate || !cleanupPolicy  || !platform || !cloudProvider || !title || !description || !labType || !accountType) {
         throw new Error('Please provide all required fields');
     }

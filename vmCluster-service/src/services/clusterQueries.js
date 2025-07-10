@@ -1,5 +1,5 @@
 module.exports = {
-    INSERT_LAB_DETAILS:`INSERT INTO vmclusterdatacenter_lab(user_id,title,description,type,platform,labguide,userguide,startdate,enddate) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    INSERT_LAB_DETAILS:`INSERT INTO vmclusterdatacenter_lab(user_id,title,description,type,platform,labguide,userguide,startdate,enddate,guacamole_name,guacamole_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     INSERT_VM_DETAILS:`INSERT INTO vmclusterdatacenter_vms(lab_id,vmid,vmname,protocol,created_at) VALUES($1,$2,$3,$4,NOW()) RETURNING *`,
     INSERT_USERVM_DETAILS:`INSERT INTO vmclusterdatacenter_uservms(labid,vmid,username,password,ip,port,usergroup) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
     
@@ -56,6 +56,21 @@ module.exports = {
         WHERE id IN (SELECT id FROM limited)
         RETURNING *;
         `,
+
+     UPDATE_USER_GROUP_CREDS_TO_RANDOM_USER:`WITH limited AS (
+        SELECT id 
+        FROM user_credential_groups 
+        WHERE userassigned IS NULL 
+            AND orgassigned IS NULL 
+            AND labid = $2 
+        LIMIT 1
+        )
+        UPDATE user_credential_groups 
+        SET userassigned = $1
+        WHERE id IN (SELECT id FROM limited)
+        RETURNING *;
+        `,
+
     UPDATE_USER_GROUP_CREDS:`UPDATE user_credential_groups set orgassigned=$1 where orgassigned IS NULL and labid=$2 RETURNING *`,
     UPDATE_VMCLUSTER_DATACENTER_LAB:`UPDATE vmclusterdatacenter_lab set title=$1,description=$2,startdate=$3,enddate=$4,software=$5,userguide=$6,labguide=$7 where labid=$8 RETURNING *`,
     UPDATE_VMCLUSTER_DATACENTER_VMS:`UPDATE vmclusterdatacenter_vms set vmname=$1,protocol=$2 where lab_id=$3 and vmid=$4 RETURNING *`,

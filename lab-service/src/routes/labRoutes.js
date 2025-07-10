@@ -45,7 +45,8 @@ const { createLab,
     updateSingleVMDatacenterUserCredRunningState,
     deleteSingleVMDatacenterLabOfUser,
     deleteSingleVMDatacenterLabFromOrg,
-    updateSingleVMDatacenterLabContent
+    updateSingleVMDatacenterLabContent,
+    getSingleVmDatacenterLabs
 } = require('../controllers/labController');
 
 const router = express.Router();
@@ -94,7 +95,7 @@ router.post('/checkvmcreated',awsConfigure);
 router.get('/getOs',getOperatingSystemsFromDatabase);
 router.post('/getAssignLabOnId',getAssignLabOnLabId);
 router.post('/updateSingleVmStatus',UpdateSingleVmLabStatus);
-router.get('/getCountoflabs/:userId',getCount);
+router.post('/getCountoflabs/:userId',getCount);
 router.get('/getCloudSliceLabsOfOrg/:orgId',getCloudSliceOrgLabs);
 router.post('/getDatacenterLabOnAdminId', getDatacenterLabOnAdminId);
 router.post('/getDatacenterLabCreds',getDatacenterLabCredentials);
@@ -116,5 +117,8 @@ router.post('/deleteAssignedSingleVMDatacenterLab',deleteSingleVMDatacenterLabFr
 router.post('/updateSingleVmDatacenterLab',upload.fields([
   { name: 'labGuide', maxCount: 1 },
   { name: 'userGuide', maxCount: 1 }
-]),updateSingleVMDatacenterLabContent )
+]),updateSingleVMDatacenterLabContent );
+router.post('/getSingleVmDatacenterLabs',getSingleVmDatacenterLabs);
+
+
 module.exports = router;

@@ -21,7 +21,7 @@ const signupService = async (name, email, password,organization,isNewOrganizatio
         let result;
         if (!isNewOrganization) {
     if (!organization) {
-          result = await pool.query(userQueries.insertAdminUserQuery,[name, email, hashedPassword, null, null, null, null])
+          result = await pool.query(userQueries.insertRandomUserQuery,[name, email, hashedPassword, null, null, null])
       // optionally handle or throw
     } else if (organization.org_admin !== null) {
       // Regular user being added to an existing org
@@ -103,7 +103,6 @@ const loginService = async (email, password) => {
         const user = userResult.rows[0];
         // Compare password
         const isPasswordValid = await comparePassword(password, user.password);
-        console.log(isPasswordValid)
         if (!isPasswordValid) {
             return { success: false, message: "Invalid Password" };
         }

@@ -729,6 +729,39 @@ const assignLab = async (req, res) => {
     }
 };
 
+//get the single vm datacenter labs 
+const getSingleVmDatacenterLabs = async (req, res) => {
+    try {
+        const { userId } = req.body;
+        if (!userId) {  
+            return res.status(400).send({
+                success: false, 
+                message: "userId is required",
+            });
+        }
+        const data = await labService.getAllSingleVMDatacenterLabs(userId);
+        if (!data) {
+            return res.status(404).send({
+                success: false,
+                message: "No single VM datacenter labs found for the provided userId",
+            });
+        }   
+        return res.status(200).send({
+            success: true,
+            message: "Successfully accessed the single VM datacenter labs",
+            data,
+        });
+    } catch (error) {
+        console.error("Error in getting single VM datacenter labs:", error);
+        return res.status(500).send({
+            success: false,
+            message: "Error in getting the single VM datacenter labs",
+            error: error.message,
+        }); 
+    }   
+};
+
+
 const getAssignLabOnId = async (req, res) => {
     try {
         const { userId } = req.body;
@@ -1240,13 +1273,14 @@ const UpdateSingleVmLabStatus = async(req,res)=>{
 const getCount = async (req, res) => {
     try {
         const userId = req.params.userId;
+        const {user} = req.body;
         if (!userId) {  
             return res.status(400).send({
                 success: false,
                 message: "User ID is required",
             });
         }
-        const result = await labService.getCount(userId);
+        const result = await labService.getCount(userId,user);
         if(!result) {
             return res.status(404).send({
                 success: false,
@@ -1259,6 +1293,7 @@ const getCount = async (req, res) => {
             data: result,
         });
     } catch (error) {
+        console.error("Error in getting the count:", error);
         return res.status(500).send({
             success: false,
             message: "Error in getting the count",
@@ -1344,5 +1379,6 @@ module.exports = {
     updateSingleVMDatacenterUserCredRunningState,
     deleteSingleVMDatacenterLabOfUser,
     deleteSingleVMDatacenterLabFromOrg,
-    updateSingleVMDatacenterLabContent
+    updateSingleVMDatacenterLabContent,
+    getSingleVmDatacenterLabs
 }
