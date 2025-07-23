@@ -1,4 +1,5 @@
 const clusterService = require('../services/clusterService');
+const cookie = require('cookie');
 
 const path = require('path');
 const fs = require('fs');
@@ -95,6 +96,7 @@ const getVMClusterDatacenterlab = async (req, res) => {
 //get datacenter lab by labId
 const getVMClusterDatacenterlabOnLabId = async(req,res)=>{
     try {
+        console.log(req.body)
         const {labId} = req.body;
         const result = await clusterService.getVMClusterDatacenterlabOnLabId(labId);
         if(!result){
@@ -180,11 +182,11 @@ const updateUserVM = async(req,res)=>{
              message:"Could not update the vmcluster datacenter lab"
              })
             }
-   return res.status(200).send({
-    success:true,
-    message:"Successfully updated the vmcluster datacenter lab",
-    data:result
-   })
+        return res.status(200).send({
+            success:true,
+            message:"Successfully updated the vmcluster datacenter lab",
+            data:result
+        })
     } catch (error) {
         console.log("Error in updating the vmcluster datacenter lab:",error.message);
         return res.status(500).send({
@@ -196,6 +198,38 @@ const updateUserVM = async(req,res)=>{
   
 
 }
+
+//update the catalogue details
+ const updateCatalogueDetails = async(req,res)=>{
+    try {
+        const {catalogueName,catalogueType,software,labId} = req.body;
+        if(!catalogueName || !catalogueType || !labId){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide all the required fields"
+            })
+        }
+        const result = await clusterService.updateVMClusterDatacenterCatalogueDetails(catalogueName,catalogueType,software,labId);
+        if(!result || !result.rows.length){
+            return res.status(404).send({
+                success:false,
+                message:"Could not find the lab to update catalogue details"
+            })
+        }
+        return res.status(200).send({
+           success:true,
+           message:"Successfully updated catalogue details" ,
+           data:result.rows[0]
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Intenal server error",
+            error:error.message
+        })
+    }
+ }
 
 //update the uservm details
 const updateUserVMWithProtocol = async(req,res)=>{
@@ -239,7 +273,7 @@ const vmclusterDatacenterLabOrgAssignment = async (req,res)=>{
            data:result
         })
     } catch (error) {
-        console.log('Error in assigning lab to organization'+error.message);
+        console.log('Error in assigning lab to organization:'+error.message);
         return res.status(500).send({
             success:false,
             message:"Error in assigning vmcluster datacenter lab to organization",
@@ -273,7 +307,7 @@ const getAllTheOrganizationLabs = async(req,res)=>{
     try {
         const {orgId} = req.body;
         const orgLabs = await clusterService.getAllTheOrganizationLabs(orgId);
-        if(!orgLabs){
+        if(!orgLabs || orgLabs?.rows?.length === 0){
             return res.status(404).send({
                 success:false,
                 message:"No labs found for the organization"
@@ -297,8 +331,11 @@ const getAllTheOrganizationLabs = async(req,res)=>{
 //assign the labs to user
 const assignLabToUser = async(req,res)=>{
     try {
+        const cookies = cookie.parse(req.headers.cookie || '');
+        const sessionToken = cookies.session_token;
         const {labId, userId, assignedBy, startDate, endDate,orgId} = req.body;
-        const result = await clusterService.assignLabToUser(labId, userId, assignedBy, startDate, endDate,orgId);
+        const result = await clusterService.assignLabToUser(labId, userId, assignedBy, startDate, endDate,orgId,sessionToken);
+        
         if(!result){
             return res.status(400).send({
                 success:false,
@@ -317,6 +354,57 @@ const assignLabToUser = async(req,res)=>{
             message:"Error in assigning lab to user",
             error:error.message
         })
+    }
+}
+const updateUserLabTimingsOfVMClusterDatacenter = async (req,res)=>{
+        try {
+            const {labId,identifier,startTime,endTime,type} = req.body;
+            if(!labId||!identifier||!startTime||!endTime ||!type){
+                return res.status(404).send({
+                    success:false,
+                    message:"Please provide all required fields"
+                })
+            }
+            const result = await clusterService.updateUserLabTimingsOfVMClusterDatacenter(labId,identifier,startTime,endTime,type);
+            return res.status(200).send({
+                success:true,
+                message:"Successfully updated the lab timings",
+                data:result
+            })
+        } catch (error) {
+            console.log(error);
+            return res.status(500).send({
+                success:false,
+                message:"Internal server error",
+                error:error?.message
+            })
+        }
+}
+//update the user vm cluster datacenter status
+const updateUserVMClusterDatacenterStatus = async (req, res) => {
+
+    try {
+        console.log(req.body);
+        const { labId, userId, status } = req.body;
+        const result = await clusterService.updateUserVMClusterDatacenterStatus(labId, userId, status);
+        if (!result) {
+            return res.status(404).send({
+                success: false,
+                message: "Could not update the user VM cluster datacenter status. Lab or user not found.",
+            });
+        }
+        return res.status(200).send({
+            success: true,
+            message: "Successfully updated the user VM cluster datacenter status",
+            data: result
+        });
+    } catch (error) {
+        console.error("Error in updateUserVMClusterDatacenterStatus:", error);
+        return res.status(500).send({
+            success: false,
+            message: "Internal server error while updating user VM cluster datacenter status",
+            error: error.message,
+        });
     }
 }
 
@@ -440,5 +528,8 @@ module.exports = {
     gerUserCredentialsForUser,
     deleteDatacenterLabFromOrg,
     deleteDatacenterLabOfUser,
-    getVMClusterDatacenterlabDetails
+    getVMClusterDatacenterlabDetails,
+    updateUserLabTimingsOfVMClusterDatacenter,
+    updateCatalogueDetails,
+    updateUserVMClusterDatacenterStatus
 }

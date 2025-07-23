@@ -45,6 +45,19 @@ const createTables = async()=>{
           labguide text[],
           userguide text[]
       )`)
+      //lab_status  logs table
+        await pool.query(`
+                    CREATE TABLE IF NOT EXISTS lab_status_logs(
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              labid UUID ,
+              lab_type TEXT,
+              type TEXT,
+              previous_status TEXT,
+              new_status TEXT,
+              changed_at TIMESTAMP DEFAULT NOW(),
+              change_reason TEXT DEFAULT 'cron_job'
+            );
+        `)
 
         //single-vm lab progress table
         await pool.query(`

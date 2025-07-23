@@ -1,6 +1,26 @@
 const clusterQueries = require('./clusterQueries');
 const pool = require('../dbconfig/db');
+const axios = require('axios')
 
+const getUserData = async(userId,sessionToken)=>{
+  try {
+    if(!userId){
+      throw new Error("Please Provide the user id")
+    }
+    const getUserData = await axios.post(`${process.env.BACKEND_URL}/api/v1/user_ms/getuserdata/${userId}`,{},{
+       headers: {
+        Cookie: `session_token=${sessionToken}`
+      }
+    }
+    );
+    if(!getUserData.data.response){
+      throw new Error("No user is found with this user id");
+    }
+    return getUserData.data.response.user;
+  } catch (error) {
+    throw error
+  }
+}
 
 const createVMClusterDatacenterLab = async (data, userId) => {
   try {
@@ -219,7 +239,7 @@ const updateVMClusterDatacenterLab = async(labId , title ,description ,startDate
     if( !labId || !title || !description || !startDate || !endDate || !credentials || !vmConfigs){
       throw new Error('Please Provide all the required fields');
     }
-    const updateLab = await pool.query(clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB,[title,description,startDate,endDate,software,UserGuide,LabGuide ,labId]);
+    const updateLab = await pool.query(clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB_DETAILS,[title,description,startDate,endDate,software,UserGuide,LabGuide ,labId]);
     if(!updateLab.rows){
       throw new Error('Could not update the vm cluster datacenter lab');
     }
@@ -274,6 +294,19 @@ const updateVMClusterDatacenterLab = async(labId , title ,description ,startDate
     return updateLab.rows[0]
 
 }
+//update vmcluster datacente catalogue details
+const updateVMClusterDatacenterCatalogueDetails = async(catalogueName,catalogueType,software,labId)=>{
+    try {
+      const updateCatalogue = await pool.query(clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB,[catalogueName,catalogueType,software,labId]);
+      if(!updateCatalogue.rows.length){
+        return [];
+      }
+      return updateCatalogue;
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+}
 
 //update the disable/enable of user vm
 const updateUserVM =  async(data)=>{
@@ -312,26 +345,21 @@ const updateUserVMWithProtocol = async(data)=>{
 const vmclusterDatacenterLabOrgAssignment = async (data) => {
   const client = await pool.connect(); // Get a dedicated client
   try {
-    let { labId, orgId, assignedBy, software, catalogueType, catalogueName } = data;
-    software = software.length > 0 ? software : null;
-
-    if (!labId || !orgId || !assignedBy  || !catalogueType || !catalogueName) {
+    let { labId, orgId, assignedBy,startDate,endDate } = data;
+    console.log(data)
+    if (!labId || !orgId || !assignedBy || !startDate || !endDate) {
       throw new Error("Please provide all required fields");
     }
 
     await client.query('BEGIN'); // Start transaction
-
-    const updateLab = await client.query(
-      clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB,
-      [software, catalogueType, labId]
-    );
-    if (!updateLab.rows.length) {
-      throw new Error('Could not update the software and catalogue type for vmclusterdatacenter lab');
+    const checkAlreadyAssigned = await client.query(clusterQueries.GET_VMCLUSTER_ORGASSIGNMENT_LAB,[labId,orgId]);
+    if(checkAlreadyAssigned.rows.length){
+      throw new Error("Lab Already Assigned");
     }
 
     const orgAssignment = await client.query(
       clusterQueries.INSERT_VMCLUSTER_DATACENTER_ORG_ASSIGNMENT,
-      [labId, orgId, catalogueName, assignedBy]
+      [labId, orgId, assignedBy,startDate,endDate]
     );
     if (!orgAssignment.rows.length) {
       throw new Error('Could not assign the vmclusterdatacenter lab to organization');
@@ -355,14 +383,13 @@ const vmclusterDatacenterLabOrgAssignment = async (data) => {
     await client.query('COMMIT'); // All good, commit changes
 
     return {
-      ...updateLab.rows[0],
       ...orgAssignment.rows[0],
       ...updateUserVMCreds.rows[0],
     };
   } catch (error) {
     await client.query('ROLLBACK'); // Revert all changes if any query fails
     console.error("Error in assigning lab to organization:", error.message);
-    throw new Error("Error in assigning lab to organization: " + error.message);
+    throw error;
   } finally {
     client.release(); // Always release the client back to the pool
   }
@@ -377,24 +404,29 @@ const getAllTheOrganizationLabs = async (orgId)=>{
     const orgLabs = await pool.query(clusterQueries.GET_VMCLUSTER_ORGASSIGNMENT,[orgId]);
 
     if(!orgLabs.rows.length){
-      throw new Error('No labs found for organiztion');
+      return [];
+      // throw new Error('No labs found for organiztion');
     }
     let labRows = [];
-    for(const org of orgLabs.rows){
-      const labDetails = await pool.query(clusterQueries.GET_ALL_LABS_ON_LABID,[org.labid]);
-      labRows.push(labDetails.rows[0]);
-    }
     let labs = [];
-    for(const lab of labRows){
-          const vmDetails = await pool.query(clusterQueries.GET_VM_DETAILS_ON_LABID,[lab.labid]);
 
-          const userVm =  await pool.query(clusterQueries.GET_ALL_USERVM_CREDS_FOR_ID,[lab.labid,orgId]);
-          labs.push({
-            lab:lab,
-            vms:vmDetails.rows,
-            users:userVm.rows
-          })
-    }
+for (const org of orgLabs.rows) {
+  const labDetailsResult = await pool.query(clusterQueries.GET_ALL_LABS_ON_LABID, [org.labid]);
+  const lab = labDetailsResult.rows[0];
+
+  const [vmDetailsResult, userVmResult] = await Promise.all([
+    pool.query(clusterQueries.GET_VM_DETAILS_ON_LABID, [lab.labid]),
+    pool.query(clusterQueries.GET_ALL_USERVM_CREDS_FOR_ID, [lab.labid, orgId])
+  ]);
+
+  labs.push({
+    lab,
+    org,
+    vms: vmDetailsResult.rows,
+    users: userVmResult.rows
+  });
+}
+
     return labs;
   } catch (error) {
     console.log('Error in getting the organization labs:'+error.message);
@@ -403,21 +435,25 @@ const getAllTheOrganizationLabs = async (orgId)=>{
 }
 
 //ASSIGN LABS TO USERS
-const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate, orgId) => {
+const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate, orgId,sessionToken) => {
   try {
-    console.log(labId, userIds, assignedBy, startDate, endDate, orgId)
     if (!labId || !userIds || !assignedBy || !startDate || !endDate) {
       throw new Error("Please provide all required fields");
     }
-
+ 
     const client = await pool.connect();
     await client.query('BEGIN');
 
+
     const userIdArray = Array.isArray(userIds) ? userIds : [userIds];
-
+    
     for (const userId of userIdArray) {
+      const userdata = await getUserData(userId,sessionToken);
+      const checkAlreadyAssigned = await pool.query(clusterQueries.CHECK_USER_LABS_VMCLUSTERDATACENTER,[labId,userId]);
+      if(checkAlreadyAssigned.rows.length){
+        throw new Error(`Lab Already assigned to ${userdata.name}`)
+      }
       let groupCredsIdToUser;
-
       if (orgId === null) {
         groupCredsIdToUser = await client.query(
           clusterQueries.UPDATE_USER_GROUP_CREDS_TO_RANDOM_USER,
@@ -429,7 +465,7 @@ const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate, o
           [userId, labId, orgId]
         );
       }
-      console.log(groupCredsIdToUser)
+      // console.log(groupCredsIdToUser)
       if (!groupCredsIdToUser.rows.length) {
         throw new Error(`Could not assign user group creds for user ${userId}`);
       }
@@ -454,7 +490,7 @@ const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate, o
 
   } catch (error) {
     console.error("Error in assigning lab to users:", error);
-    throw new Error("Error in assigning lab to users: " + error.message);
+    throw error;
   }
 };
 
@@ -467,7 +503,7 @@ const getUserAssignedDatacenterLabs = async (userId) => {
     }
     const userLabs = await pool.query(clusterQueries.GET_USER_LABS_VMCLUSTERDATACENTER, [userId]);
     if (!userLabs.rows.length) {
-      throw new Error("No labs found for this user");
+      return [];
     }
     return userLabs.rows;
   } catch (error) {
@@ -537,22 +573,66 @@ const deleteDatacenterLabFromOrg = async (labId, orgId , adminId) => {
     
   }
 }
+//update user vmcluster datacenter lab timings
+const updateUserLabTimingsOfVMClusterDatacenter = async(labId,identifier,startTime,endTime,type)=>{
+    try {
+        let response;
+        if(type === 'org'){
+          response = await pool.query(clusterQueries.UPDATE_ORG_VMCLUSTER_DATACENTER_TIME,[startTime,endTime,labId,identifier]);
+        }
+        else{
+          response = await pool.query(clusterQueries.UPDATE_USER_VMCLUSTER_DATACENTER_TIME,[startTime,endTime,labId,identifier]);
+        }
+        
+        if(!response.rows.length){
+            throw new Error(`No lab found for this user`)
+        }
+        return response.rows;
+    } catch (error) {
+        console.log(error);
+        throw error;
+    }
+}
+
+//update user vmcluster datacenter lab status
+const updateUserVMClusterDatacenterStatus = async(labId,userId,status)=>{
+    try {
+        if(!labId || !userId || !status){
+            throw new Error("Please provide the lab id, user id and status");
+        }
+        const response = await pool.query(clusterQueries.UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS,[status,labId,userId]);
+        console.log(response.rows)
+        if(!response.rows.length){
+            throw new Error("No lab found for this user");
+        }
+        return response.rows[0];
+    } catch (error) {
+        console.log(error);
+        throw error;
+    }
+}
 
 //DELETE USER ASSIGNED DATACENTER LAB
 const deleteDatacenterLabOfUser = async (labId,orgId, userId) => {
     try {
-        if (!labId || !orgId || !userId) {
+        if (!labId || !userId) {
             throw new Error("Please provide the lab id, organization id and user id");
         }
         await pool.query('BEGIN');
         // Delete user credentials
-        await pool.query(clusterQueries.DELETE_USER_CREDS, [labId, userId, orgId]);
+        if(orgId === null || orgId === undefined){
+          await pool.query(clusterQueries.DELETE_RANDOM_USER_CREDS,[labId,userId]);
+        }
+        else{
+          await pool.query(clusterQueries.DELETE_USER_CREDS,[labId, userId, orgId]);
+        }
         // Delete user assignment
         await pool.query(clusterQueries.DELETE_USER_DATACENTER_LAB, [labId, userId]);
         
         await pool.query('COMMIT');
         return true;
     } catch (error) {
+        await pool.query('ROLLBACK')
         console.error("Error in deleting datacenter lab of user:", error);
         throw new Error("Error in deleting datacenter lab of user: " + error.message);
       
@@ -575,5 +655,8 @@ module.exports = {
     gerUserCredentialsForUser,
     deleteDatacenterLabFromOrg,
     deleteDatacenterLabOfUser,
-    getVMClusterDatacenterlabDetails
+    getVMClusterDatacenterlabDetails,
+    updateUserLabTimingsOfVMClusterDatacenter,
+    updateVMClusterDatacenterCatalogueDetails,
+    updateUserVMClusterDatacenterStatus
 };

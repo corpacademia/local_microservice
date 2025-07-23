@@ -61,7 +61,8 @@ const {
   getAllCloudSliceLabs,
   updateCloudSliceLabRunningStateOfUser,
   addLabStatusOfUser,
-  getUserLabExerciseStatus
+  getUserLabExerciseStatus,
+  updateCatalogueDetails
 } = require('../controllers/cloudSliceAwsController')
 
 router.get('/getAwsServices',getAllAwsServices);
@@ -103,6 +104,7 @@ router.post('/updateLabStatusOfUser',updateCloudSliceLabOfUser);
 router.get('/getOrgAssignedLabDetails/:orgId',getAllLabDetailsForOrgAssigned);
 router.post('/updateUserCloudSliceTimes',updateUserCloudSliceLabTimes);
 router.post('/updateCloudSliceRunningStateOfUser',updateCloudSliceLabRunningStateOfUser);
-router.post('/addLabStatusOfUser',addLabStatusOfUser)
+router.post('/addLabStatusOfUser',addLabStatusOfUser);
+router.post('/updateCloudsliceCatalogueDetails',updateCatalogueDetails)
 
 module.exports = router;

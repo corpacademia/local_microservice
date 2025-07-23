@@ -46,7 +46,10 @@ const { createLab,
     deleteSingleVMDatacenterLabOfUser,
     deleteSingleVMDatacenterLabFromOrg,
     updateSingleVMDatacenterLabContent,
-    getSingleVmDatacenterLabs
+    getSingleVmDatacenterLabs,
+    updateUserLabTimingsOfSingleVMDatacenter,
+    updateSingleVMAws,
+    updateUserLabTimingsOfAwsSingleVMDatacenter
 } = require('../controllers/labController');
 
 const router = express.Router();
@@ -119,6 +122,9 @@ router.post('/updateSingleVmDatacenterLab',upload.fields([
   { name: 'userGuide', maxCount: 1 }
 ]),updateSingleVMDatacenterLabContent );
 router.post('/getSingleVmDatacenterLabs',getSingleVmDatacenterLabs);
+router.post('/updateSingleVMDatacenterLabTime',updateUserLabTimingsOfSingleVMDatacenter);
+router.post('/updateCatalogueDetails',updateSingleVMAws);
+router.post('/updateUserLabTimingsOfAwsSingleVMDatacenter',updateUserLabTimingsOfAwsSingleVMDatacenter)
 
 
 module.exports = router;

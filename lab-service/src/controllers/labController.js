@@ -2,8 +2,12 @@ const labService = require('../services/labService');
 
 const path = require('path');
 const fs = require('fs');
+const cookie = require('cookie');
 
 const uploadDir = path.join(__dirname, '../public/uploads');
+
+const {executeCron} = require('../services/labStatusService');
+executeCron();
 
 const createLab = async (req, res) => {
   try {
@@ -255,14 +259,14 @@ const getDatacenterLabCredentials = async (req, res) => {
 //update single vm datacenter lab
 const updateSingleVmDatacenterLab = async (req, res) => {
     try {
-        const { software, catalogueType, labId } = req.body;
-        if (!software || !catalogueType || !labId) {
+        const { software, catalogueType, labId,catalogueName } = req.body;
+        if (!software || !catalogueType || !labId ||!catalogueName) {
             return res.status(400).send({
                 success: false,
                 message: "Software, catalogueType, and labId are required",
             });
         }
-        const result = await labService.updateSingleVmDatacenterLab(labId,software, catalogueType); 
+        const result = await labService.updateSingleVmDatacenterLab(labId,software, catalogueType,catalogueName); 
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
@@ -287,14 +291,14 @@ const updateSingleVmDatacenterLab = async (req, res) => {
 //update single vm datacenter user creds running state
 const updateSingleVMDatacenterUserCredRunningState = async (req, res) => {
     try {
-        const { isRunning, userId, labId } = req.body;
+        const { isrunning, userId, labId } = req.body;
         if (!userId || !labId ) {
             return res.status(400).send({
                 success: false,
                 message: "Please Provide All The Required Fields",
             });
         }
-        const result = await labService.updateSingleVMDatacenterUserCredRunningState(isRunning, userId, labId); 
+        const result = await labService.updateSingleVMDatacenterUserCredRunningState(isrunning, userId, labId); 
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
@@ -436,15 +440,15 @@ const getLabOnId = async(req,res)=>{
 
 //assign single vm datacenter lab to organization
 const assignSingleVmDatacenterLab = async (req, res) => {
-    try {   
-        const { labId, orgId, assignedBy, catalogueName } = req.body;
-        if (!labId || !orgId || !assignedBy || !catalogueName) {
+    try { 
+        const { labId, orgId, assignedBy,startDate,endDate } = req.body;
+        if (!labId || !orgId || !assignedBy ) {
             return res.status(400).send({
                 success: false,
-                message: "labId, orgId, assignedBy, and catalogueName are required",
+                message: "labId, orgId and assignedBy are required",
             });
         }
-        const result = await labService.createDatacenterLabOrgAssignment(labId, orgId, assignedBy, catalogueName);
+        const result = await labService.createDatacenterLabOrgAssignment(labId, orgId, assignedBy,startDate,endDate);
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
@@ -476,7 +480,7 @@ const getOrgAssignedSingleVMDatacenterLab = async(req,res)=>{
             })
         }
         const result = await labService.getOrgAssignedsingleVMDatacenterLab(orgId);
-        if(!result){
+        if(!result || result?.rows?.length === 0){
             return res.status(400).send({
                 success:false,
                 message:"No lab is found for this organization for this lab"
@@ -624,8 +628,10 @@ const deleteSingleVmDatacenterLab = async(req,res)=>{
 
 const assignSingleVMDatacenterLabToUsers = async(req,res)=>{
     try {
+        const cookies = cookie.parse(req.headers.cookie || '');
+        const sessionToken = cookies.session_token;
         const data =  req.body;
-        const result =  await labService.assignSingleVmDatacenterLabToUser(data);
+        const result =  await labService.assignSingleVmDatacenterLabToUser(data,sessionToken);
         if(!result){
             return res.status(400).send({
                 success:false,
@@ -712,8 +718,10 @@ const getUserAssignedSingleVMDatacenterLabs = async(req,res)=>{
 
 const assignLab = async (req, res) => {
     try {
-        const { lab, userId, assign_admin_id } = req.body;
-        const response = await labService.assignLab(lab, userId, assign_admin_id);
+        const cookies = cookie.parse(req.headers.cookie || '');
+        const sessionToken = cookies.session_token;
+        const { lab, userId, assign_admin_id,startDate,endDate } = req.body;
+        const response = await labService.assignLab(lab, userId, assign_admin_id,startDate,endDate,sessionToken);
 
         return res.status(200).send({
             success: true,
@@ -862,6 +870,90 @@ const updateLabsOnConfig = async (req, res) => {
     }
 };
 
+//update single vm aws
+const updateSingleVMAws =  async(req,res)=>{
+    try {
+        const {catalogueName, numberOfDays,hoursPerDay,expiresIn,software,catalogueType,labId} = req.body;
+        if(!catalogueName || !numberOfDays ||!hoursPerDay||!expiresIn||!catalogueType ||!labId){
+            return res.status(400).send({
+                success:false,
+                message:'Please provide all the required fields'
+            })
+        }
+        const result = await labService.updateSingleVMAws(catalogueName, numberOfDays,hoursPerDay,expiresIn,software,catalogueType,labId);
+        if(!result || !result.length === 0){
+            return res.status(404).send({
+                success:false,
+                message:"No lab found to update the catalogue details"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfull updated",
+            data:result
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal Server Error",
+            error:error.message
+        })
+    }
+}
+
+//update the lab timings
+const updateUserLabTimingsOfSingleVMDatacenter = async (req,res)=>{
+        try {
+            const {labId,identifier,startTime,endTime,type} = req.body;
+            if(!labId||!identifier||!startTime||!endTime || !type){
+                return res.status(404).send({
+                    success:false,
+                    message:"Please provide all required fields"
+                })
+            }
+            const result = await labService.updateUserLabTimingsOfSingleVMDatacenter(labId,identifier,startTime,endTime,type);
+            return res.status(200).send({
+                success:true,
+                message:"Successfully updated the lab timings",
+                data:result
+            })
+        } catch (error) {
+            console.log(error);
+            return res.status(500).send({
+                success:false,
+                message:"Internal server error",
+                error:error?.message
+            })
+        }
+}
+
+//update the aws single vm user lab timings
+const updateUserLabTimingsOfAwsSingleVMDatacenter = async (req,res)=>{
+        try {
+            const {labId,identifier,startTime,endTime,type} = req.body;
+            if(!labId||!identifier||!startTime||!endTime||!type){
+                return res.status(404).send({
+                    success:false,
+                    message:"Please provide all required fields"
+                })
+            }
+            const result = await labService.updateUserLabTimingsOfAwsSingleVMDatacenter(labId,identifier,startTime,endTime,type);
+            return res.status(200).send({
+                success:true,
+                message:"Successfully updated the lab timings",
+                data:result
+            })
+        } catch (error) {
+            console.log(error);
+            return res.status(500).send({
+                success:false,
+                message:"Internal server error",
+                error:error?.message
+            })
+        }
+}
+
 const awsConfigure = async (req, res) => {
     try {
         const { lab_id } = req.body;
@@ -923,13 +1015,12 @@ const getAwsInstanceDetailsOfUsers = async (req, res) => {
     try {
         const { lab_id, user_id } = req.body;
         const instanceDetails = await labService.getAwsInstanceDetailsOfUsers(lab_id, user_id);
-        console.log(instanceDetails)
-        if (!instanceDetails) {
-            return res.status(404).send({
-                success: false,
-                message: "Invalid lab ID",
-            });
-        }
+        // if (!instanceDetails) {
+        //     return res.status(404).send({
+        //         success: true,
+        //         message: "No instance details for this Lab ID",
+        //     });
+        // }
 
         return res.status(200).send({
             success: true,
@@ -1007,10 +1098,9 @@ const updateAwsLabInstanceDetails = async (req, res) => {
 
 const labBatch = async (req, res) => {
     try {
-        const { lab_id, admin_id, org_id, config_details, configured_by, software } = req.body;
+        const { lab_id, admin_id, org_id, configured_by, enddate } = req.body;
 
-        const { assigned, data } = await labService.assignLabBatch(lab_id, admin_id, org_id, config_details, configured_by, software);
-
+        const { assigned, data } = await labService.assignLabBatch(lab_id, admin_id, org_id, configured_by, enddate);
         if (assigned) {
             return res.status(200).send({
                 success: false,
@@ -1041,7 +1131,7 @@ const getLabBatchAssessment = async (req, res) => {
 
         const data = await labService.getLabBatchAssessment(admin_id);
 
-        if (!data.length) {
+        if (!data || !data?.rows?.length === 0) {
             return res.status(404).send({
                 success: false,
                 message: "Invalid details",
@@ -1380,5 +1470,8 @@ module.exports = {
     deleteSingleVMDatacenterLabOfUser,
     deleteSingleVMDatacenterLabFromOrg,
     updateSingleVMDatacenterLabContent,
-    getSingleVmDatacenterLabs
+    getSingleVmDatacenterLabs,
+    updateUserLabTimingsOfSingleVMDatacenter,
+    updateSingleVMAws,
+    updateUserLabTimingsOfAwsSingleVMDatacenter
 }

@@ -1,7 +1,7 @@
 module.exports = {
     GET_ALL_AWS_SERVICES:`SELECT * FROM awsservices`,
     INSERT_LAB_DATA:`INSERT INTO cloudslicelab(createdby,services, region, startDate, endDate, cleanupPolicy, platform, provider, title, description, modules,credits,accounttype) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-    INSERT_ORG_ASSIGNMENT:`INSERT INTO cloudsliceorgassignment(labid,orgid,assigned_by) VALUES($1,$2,$3) RETURNING *`,
+    INSERT_ORG_ASSIGNMENT:`INSERT INTO cloudsliceorgassignment(labid,orgid,assigned_by,startdate,enddate) VALUES($1,$2,$3,$4,$5) RETURNING *`,
     INSERT_LAB_DATA_WITH_MODULES:`INSERT INTO cloudslicelab(createdby,services, region, startDate, endDate, platform, provider, title, description, modules) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
     
     INSERT_MODULES:`INSERT INTO modules(name,description,lab_id,totalduration) VALUES($1,$2,$3,$4) RETURNING *`,
@@ -28,6 +28,7 @@ module.exports = {
     GET_LABS_ON_ID:`SELECT * FROM cloudslicelab where labid = $1`,
     GET_ALL_CLOUDSLICE_LABS:`SELECT * FROM cloudslicelab`,
     GET_USER_ASSIGNED_LABS:`SELECT * FROM cloudsliceuserassignment where user_id = $1`,
+    CHECK_USER_ASSIGNED_LAB:`SELECT * FROM cloudsliceuserassignment where labid=$1 and user_id=$2`,
     UPDATE_SERVICES_ON_LABID:`UPDATE cloudslicelab SET services = $1 WHERE labid = $2 RETURNING *`,
     GET_MODULES_ON_LABID:`SELECT * FROM modules WHERE lab_id = $1`,
     GET_LAB_EXERCISES_ON_MODULEID:`SELECT 
@@ -119,10 +120,11 @@ WHERE
   //update exercise main content
   UPDATE_LAB_EXERCISE_CONTENT_ON_EXERCISE_ID:`UPDATE lab_exercises SET instructions=$1, services=$2, files=$3,  cleanuppolicy=$4 WHERE exercise_id = $5 RETURNING *`,
   //update the catalogue in cloudslicelab
-  UPDATE_CLOUDSLICELAB:`UPDATE cloudslicelab set catalogue=$1 where labid=$2 RETURNING *`,
+  UPDATE_CLOUDSLICELAB:`UPDATE cloudslicelab set cataloguename=$1,cataloguetype=$2 where labid=$3 RETURNING *`,
   UPDATE_CLOUDSLICELAB_STATUS:`UPDATE cloudslicelab set status=$1 ,launched=$2 where labid=$3 and  createdby=$4 RETURNING *`,
   UPDATE_CLOUDSLICELAB_ORG_STATUS:`UPDATE cloudsliceorgassignment set status=$1 ,launched=$2 where labid=$3 and orgid=$4 Returning *`,
   UPDATE_CLOUDSLICELAB_USER_STATUS:'UPDATE cloudsliceuserassignment set status=$1, launched=$2 where labid=$3 and user_id=$4 Returning *',
   UPDATE_CLOUDSLICELAB_USER_RUNNING:`UPDATE cloudsliceuserassignment set isrunning=$1 where labid=$2 and user_id=$3 Returning *`,
-  UPDATE_CLOUDSLICELAB_USER_TIMES:`UPDATE cloudsliceuserassignment set start_date=$1,end_date=$2 where labid=$3 and user_id=$4 RETURNING *`
+  UPDATE_CLOUDSLICELAB_USER_TIMES:`UPDATE cloudsliceuserassignment set start_date=$1,end_date=$2 where labid=$3 and user_id=$4 RETURNING *`,
+  UPDATE_CLOUDSLICELAB_ORG_TIMES:`UPDATE cloudsliceorgassignment set startdate=$1,enddate=$2 where labid=$3 and orgid=$4 RETURNING *`
 }

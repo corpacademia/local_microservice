@@ -20,7 +20,10 @@ const {
     gerUserCredentialsForUser,
     deleteDatacenterLabFromOrg,
     deleteDatacenterLabOfUser,
-    getVMClusterDatacenterlabDetails
+    getVMClusterDatacenterlabDetails,
+    updateUserLabTimingsOfVMClusterDatacenter,
+    updateCatalogueDetails,
+    updateUserVMClusterDatacenterStatus
 } = require('../controller/clusterController');
 
 const uploadDir = path.join(__dirname, '../public/uploads/');
@@ -59,5 +62,8 @@ router.post('/getUserAssignedClusterCredsToUser',gerUserCredentialsForUser);
 router.post('/deleteFromOrganization',deleteDatacenterLabFromOrg);
 router.post('/deleteClusterLab',deleteDatacenterLabOfUser);
 router.post('/getClusterLabDetails',getVMClusterDatacenterlabDetails);
+router.post('/updateUserLabTimingsOfVMClusterDatacenter',updateUserLabTimingsOfVMClusterDatacenter);
+router.post('/updateVMClusterDatacenterCatalogueDetails',updateCatalogueDetails);
+router.post('/updateUserVMClusterDatacenterStatus',updateUserVMClusterDatacenterStatus);
 
 module.exports = router;

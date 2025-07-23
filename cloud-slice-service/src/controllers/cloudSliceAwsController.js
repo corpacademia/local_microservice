@@ -1,7 +1,10 @@
 
 const cloudSliceAwsService = require('../services/cloudSliceAwsService');
+const cookie = require('cookie')
 
 const {LabAssignmentError} = require('../utils/errors');
+
+
 
 const getAllAwsServices = async(req,res)=>{
     try {
@@ -737,17 +740,50 @@ const updateCloudSliceLab = async(req,res)=>{
     }
 }
 
+//update catalogue details
+const updateCatalogueDetails = async(req,res)=>{
+    try {
+        const {catalogueName,catalogueType,labId} = req.body;
+        if(!catalogueName || !catalogueType ||!labId){
+            return res.status(404).send({
+                success:false,
+                message:"Please provide all the required fields"
+            })
+        }
+        const result = await cloudSliceAwsService.updateCatalogueDetails(catalogueName,catalogueType,labId);
+        if(!result || result.length === 0){
+            return res.status(400).send({
+                success:false,
+                message:'No lab found to update catalogue details'
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully updated catalogue details",
+            data:result
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
+
 //cloudslice organization assignment
 const cloudSliceOrgAssignment = async(req,res)=>{
     try {
-        const {sliceId,organizationId,userId,isPublic} = req.body;
-        if(!sliceId || !organizationId  || !userId){
+        
+        const {sliceId,organizationId,userId,startDate,endDate} = req.body;
+        if(!sliceId || !organizationId  || !userId ||!startDate || !endDate){
             return res.status(400).send({
                 success:false,
                 message:"Please provide lab id and organization id"
             })
         }
-        const result = await cloudSliceAwsService.cloudSliceLabOrgAssignment(sliceId,organizationId,userId,isPublic);
+        const result = await cloudSliceAwsService.cloudSliceLabOrgAssignment(sliceId,organizationId,userId,startDate,endDate);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -765,7 +801,7 @@ const cloudSliceOrgAssignment = async(req,res)=>{
         return res.status(409).send({
         success: false,
         message: error.message,
-        error: error.data
+        error: error.message
         });
     }
         return res.status(500).send({
@@ -852,6 +888,8 @@ const deleteCloudSliceLabAssignedToOrg = async(req,res)=>{
 //assign cloud slice lab to users
 const assignCloudSliceLabToUsers = async(req,res)=>{
     try {
+        const cookies = cookie.parse(req.headers.cookie || '');
+        const sessionToken = cookies.session_token;
         const data = req.body;
         if(!data){
             return res.status(400).send({
@@ -859,7 +897,7 @@ const assignCloudSliceLabToUsers = async(req,res)=>{
                 message:"Please provide lab id and organization id"
             })
         }
-        const result = await cloudSliceAwsService.cloudSliceLabUserAssignment(data);
+        const result = await cloudSliceAwsService.cloudSliceLabUserAssignment(data,sessionToken);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -1245,8 +1283,8 @@ const updateCloudSliceLabRunningStateOfUser = async(req,res)=>{
 //update cloudsliceuserlab times
 const updateUserCloudSliceLabTimes = async(req,res)=>{
     try {
-        const {startDate,endDate,labId,userId} = req.body;
-        const result = await cloudSliceAwsService.updateUserCloudSliceLabTimes(startDate,endDate,labId,userId);
+        const {startDate,endDate,labId,identifier,type} = req.body;
+        const result = await cloudSliceAwsService.updateUserCloudSliceLabTimes(startDate,endDate,labId,identifier,type);
         if(!result){
             return res.status(404).send(
                 {
@@ -1368,5 +1406,6 @@ module.exports = {
     getAllCloudSliceLabs,
     updateCloudSliceLabRunningStateOfUser,
     addLabStatusOfUser,
-    getUserLabExerciseStatus
+    getUserLabExerciseStatus,
+    updateCatalogueDetails
 }
