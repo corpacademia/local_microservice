@@ -22,7 +22,9 @@ const {
     addOrganizationUser,
     getOrganizationUser,
     deleteRandomUsers,
-    updateUserProfile
+    updateUserProfile,
+    sendVerificationEmail,
+    verifyEmailCode
 } = require('../controllers/authController');
 
 //api router
@@ -70,5 +72,7 @@ router.get('/uploads/:filename', (req, res) => {
   const filePath = path.join(uploadDir, req.params.filename);
   res.sendFile(filePath);
 });
+router.post('/send-verification-code',sendVerificationEmail);
+router.post('/verify-code',verifyEmailCode)
 
  module.exports = router;

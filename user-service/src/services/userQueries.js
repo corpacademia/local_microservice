@@ -4,7 +4,10 @@ module.exports = {
     insertUserQuery : `INSERT INTO organization_users (name, email, password,admin_id,organization,organization_type,org_id) VALUES ($1, $2, $3,$4,$5,$6,$7) RETURNING *`,
     insertAdminUserQuery : `INSERT INTO users (name, email, password,organization,organization_type,role,org_id) VALUES ($1, $2, $3,$4,$5,$6,$7) RETURNING *`,
     insertRandomUserQuery : `INSERT INTO users (name, email, password,organization,organization_type,org_id) VALUES ($1, $2, $3,$4,$5,$6) RETURNING *`,
+    insertVerificationCode:`INSERT INTO email_verification_code(email,verification_code,expires_at) VALUES($1,$2,NOW() + INTERVAL '10 minutes') RETURNING *`,
 
+    getVerificationCode: `SELECT * FROM email_verification_code WHERE email = $1 AND verification_code = $2 AND expires_at > NOW()`,
+    deleteVerificationCode: `DELETE FROM email_verification_code WHERE email = $1 AND verification_code = $2 RETURNING *`,
     getUserByEmailQuery: `SELECT * FROM users WHERE email = $1`,
     getOrgUserByEmailQuery: `SELECT * FROM organization_users WHERE email = $1`,
     updateUserLastActiveQuery : `UPDATE users SET lastactive = $1, status = 'active' WHERE email = $2 RETURNING *`,

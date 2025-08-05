@@ -48,6 +48,56 @@ const signupController = async (req, res) => {
         });
     }
 };
+
+//send email verification link
+const sendVerificationEmail = async (req,res) => {
+  try {
+    const {email} = req.body;
+    const result = await userServices.sendVerificationEmail(email);
+    if (!result) {
+      return res.status(400).send({
+        success: false,
+        message: result.message
+      });
+    }
+    return res.status(200).send({
+      success: true,
+      message: "Verification email sent successfully"
+    });
+  } catch (error) {
+    return res.status(500).send({
+      success: false,
+      message: "Could not send verification email",
+      error: error.message
+    });
+  }
+}
+
+//verify the email code
+const verifyEmailCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    const result = await userServices.verifyEmailCode(email, code);
+    if (!result) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid or expired verification code"
+      });
+    }
+    return res.status(200).send({
+      success: true,
+      message: "Email verified successfully"
+    });
+  } catch (error) {
+    console.log(error)
+    return res.status(500).send({
+      success: false,
+      message: "Could not verify email",
+      error: error.message
+    });
+  }
+};
+
 const loginController = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -411,5 +461,7 @@ module.exports={
     updateUser,
     insertUsers,
     deleteRandomUsers,
-    updateUserProfile
+    updateUserProfile,
+    sendVerificationEmail,
+    verifyEmailCode
 }

@@ -88,6 +88,82 @@ try {
     }
 };
 
+//send the email verification link
+const sendVerificationEmail = async (email) =>{
+  try {
+       const existingUser = await pool.query(userQueries.getUserByEmailQuery, [email]);
+    if (existingUser.rows.length > 0) {
+    throw new Error('User with this email already exists ');
+   }
+    const existingOrgUser = await pool.query(userQueries.getOrgUserByEmailQuery, [email]);
+    if (existingOrgUser.rows.length > 0) {
+    throw new Error('User with this email already exists in the organization');
+    }
+   // Generate 6-digit random code
+   const generateCode =  Math.floor(100000 + Math.random() * 900000).toString(); 
+
+    const htmlTemplate = process.env.htmlTemplatePath;
+    if (!fs.existsSync(htmlTemplate)) {
+      throw new Error('Email template not found');
+    }
+    const templateContent = fs.readFileSync(htmlTemplate, 'utf8');
+    // 2. Replace placeholders in the template
+    const placeholders = {
+      email,
+      verificationCode: generateCode
+    };
+    let emailContent = templateContent;
+    for (const key in placeholders) {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      emailContent = emailContent.replace(regex, placeholders[key]);
+    } 
+
+    // 3. Configure mail transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Email Verification',
+      html: emailContent
+    };
+
+    // 4. Send the email
+    await transporter.sendMail(mailOptions);
+    const result = await pool.query(userQueries.insertVerificationCode, [email, generateCode]);
+    if (result.rows.length === 0) {
+      throw new Error('Failed to insert verification code into database');
+    }
+    return true;
+  } catch (error) {
+    throw error;
+  }
+}
+
+//verify the email verification code
+const verifyEmailCode = async (email, code) => {
+  try {
+    const result = await pool.query(userQueries.getVerificationCode, [email, code]);
+    if (result.rows.length === 0) {
+      throw new Error('Invalid or expired verification code');
+    }
+    const deleted = await pool.query(userQueries.deleteVerificationCode, [email, code]);
+    if (deleted.rows.length === 0) {
+      throw new Error('Failed to delete verification code');
+    }
+    return true;
+  } catch (error) {
+    throw error;
+  }
+};
+
 const loginService = async (email, password) => {
     try {
         let userResult = await pool.query(userQueries.getUserByEmailQuery, [email]);
@@ -648,5 +724,7 @@ module.exports = {
   insertUsers,
   logoutService,
   deleteRandomUsers,
-  updateUserProfile
+  updateUserProfile,
+  sendVerificationEmail,
+  verifyEmailCode
  };
