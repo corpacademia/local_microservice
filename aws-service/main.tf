@@ -13,7 +13,7 @@ provider "aws" {
 }
 
 resource "aws_instance" "app" {
-  ami           = "ami-004687960b9b6dcec"
+  ami           = "ami-02e0d5b0e4a8ddd40"
   instance_type = "t3.small"
 
   user_data = <<-EOF

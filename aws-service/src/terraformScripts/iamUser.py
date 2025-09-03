@@ -4,7 +4,12 @@ import sys
 import secrets
 import string
 import psycopg2
+import re
 
+import re
+
+def sanitize_username(username):
+    return re.sub(r"[^a-zA-Z0-9+=,.@_-]", "-", username)
 
 def build_policy(username, services):
     allowed_actions = [f"{service}:*" for service in services]
@@ -85,7 +90,7 @@ def get_console_login_link(iam_client):
     return console_url
 
 
-def update_credentials_in_db(username, password, console_url, role, labid, orgid=None, user_id=None):
+def update_credentials_in_db(username, password, console_url, role, labid, orgid=None, user_id=None,purchased=False):
     try:
         conn = psycopg2.connect(
             host="localhost",
@@ -95,8 +100,8 @@ def update_credentials_in_db(username, password, console_url, role, labid, orgid
             dbname="golab"
         )
         cur = conn.cursor()
-
-        if role == "superadmin":
+        if role == "superadmin" or role == "orgsuperadmin" :
+            
             table = "cloudslicelab"
             query = f"""
                 UPDATE {table}
@@ -118,7 +123,10 @@ def update_credentials_in_db(username, password, console_url, role, labid, orgid
             cur.execute(query, (username, password, console_url, labid, orgid))
 
         elif role == "user":
-            table = "cloudsliceuserassignment"
+            if purchased:
+                table = 'cloudslice_purchased_labs'
+            else:
+                table = "cloudsliceuserassignment"
             if user_id is None:
                 print("Error: user_id is required for user role.")
                 return
@@ -144,22 +152,35 @@ def update_credentials_in_db(username, password, console_url, role, labid, orgid
 
 
 def main():
-    if len(sys.argv) < 5:
-        print("Usage: python iam_user.py <username> <service1,service2,...> <role> <labid> [orgid] [user_id]")
+    if len(sys.argv) < 6:
+        print("Usage: python iam_user.py <username> <service1,service2,...> <role> <labid> [orgid/userid] [purchased]")
         sys.exit(1)
 
     username = sys.argv[1]
+    original_username = sys.argv[1]
+    username = sanitize_username(original_username)
+
     services = sys.argv[2].split(",")
     role = sys.argv[3]
     labid = sys.argv[4]
-    orgid =None
-    user_id=None
-    if role == 'orgadmin':
+
+    orgid = None
+    user_id = None
+    purchased = False
+
+    if role == "orgadmin" and len(sys.argv) >= 6:
         orgid = sys.argv[5]
-    elif role == 'user':
-        user_id = sys.argv[5]
-    # orgid = sys.argv[5] if len(sys.argv) > 5 else None
-    # user_id = sys.argv[6] if len(sys.argv) > 6 else None
+
+    if role == "user":
+        if len(sys.argv) >= 6:
+            user_id = sys.argv[5]
+        if len(sys.argv) >= 7:
+            # Convert string to boolean
+            purchased = sys.argv[6].lower() == "true"
+
+    # For superadmin/orgsuperadmin roles, optionally accept purchased
+    if role in ("superadmin", "orgsuperadmin") and len(sys.argv) >= 6:
+        purchased = sys.argv[5].lower() == "true"
 
     iam_client = boto3.client('iam')
 
@@ -175,14 +196,12 @@ def main():
 
     console_url = get_console_login_link(iam_client)
 
-    # Output the IAM user's credentials
     print("\nIAM User Credentials:")
     print(f"Username: {username}")
     print(f"Password: {password}")
     print(f"Console Login URL: {console_url}")
 
-    # Save credentials to PostgreSQL
-    update_credentials_in_db(username, password, console_url, role, labid, orgid, user_id)
+    update_credentials_in_db(username, password, console_url, role, labid, orgid, user_id, purchased)
 
 
 if __name__ == "__main__":
