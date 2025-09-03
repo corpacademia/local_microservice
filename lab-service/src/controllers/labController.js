@@ -8,6 +8,8 @@ const uploadDir = path.join(__dirname, '../public/uploads');
 
 const {executeCron} = require('../services/labStatusService');
 executeCron();
+const {executeNotificationCron} = require('../services/notificationServices');
+executeNotificationCron();
 
 const createLab = async (req, res) => {
   try {
@@ -259,20 +261,37 @@ const getDatacenterLabCredentials = async (req, res) => {
 //update single vm datacenter lab
 const updateSingleVmDatacenterLab = async (req, res) => {
     try {
-        const { software, catalogueType, labId,catalogueName } = req.body;
-        if (!software || !catalogueType || !labId ||!catalogueName) {
+        const { software, catalogueType, labId,catalogueName,level,category,price } = req.body;
+        if (!software || !catalogueType || !labId ||!catalogueName || !level || !category || !price) {
             return res.status(400).send({
                 success: false,
                 message: "Software, catalogueType, and labId are required",
             });
         }
-        const result = await labService.updateSingleVmDatacenterLab(labId,software, catalogueType,catalogueName); 
+        const result = await labService.updateSingleVmDatacenterLab(labId,software, catalogueType,catalogueName,level,category,price); 
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
                 message: "No datacenter lab found for the provided labId",
             });
         }
+
+        //create a new catalogue in WooCommerce
+       api.post("products", {
+        name: catalogueName,
+        description:result.description,
+        categories: category ? [{ id: category }] : [],
+        regular_price: "150",
+        level:level,
+        duration: getDays(result),
+        })
+        .then((response) => {
+            console.log("Created Product:", response.data);
+        })
+        .catch((error) => {
+            console.error(error.response.data);
+        });
+
         return res.status(200).send({
             success: true,
             message: "Successfully updated the single VM datacenter lab",
@@ -287,6 +306,131 @@ const updateSingleVmDatacenterLab = async (req, res) => {
         });
     }
 }
+
+
+//get all lab catalogues
+const getAllLabCatalogues = async (req, res) => {
+    try {
+        console.log('getting a request');
+        const result = await labService.getAllLabCatalogues();
+        if (!result || result.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: "No lab catalogues found",
+            });
+        }
+        return res.status(200).send({
+            success: true,
+            message: "Successfully retrieved all lab catalogues",
+            data: result,
+        });
+    } catch (error) {
+        console.error("Error in getting all lab catalogues:", error);
+        return res.status(500).send({
+            success: false,
+            message: "Error in getting all lab catalogues",
+            error: error.message,
+        });
+    }
+}
+//get user purchased single vm labs
+const getUserPurchasedSinglvmLabs = async (req, res) => {
+    try {
+        const {userId} = req.body;
+        if(!userId){
+            return res.status(400).send({
+                success:true,
+                message:"Please provide the userid",
+            })
+        }
+        const result = await labService.getUserPurchasedSinglvmLabs(userId);
+        if (!result || result.length === 0) {
+            return res.status(404).send({
+                success: true,
+                message: "No lab  found",
+                data: [],
+            });
+        }
+        return res.status(200).send({
+            success: true,
+            message: "Successfully retrieved all lab ",
+            data: result,
+        });
+    } catch (error) {
+        console.error("Error in getting all lab :", error);
+        return res.status(500).send({
+            success: false,
+            message: "Error in getting all lab ",
+            error: error.message,
+        });
+    }
+}
+//delete lab catalogue
+const deleteCatalogue = async (req, res) => {
+    try {
+        const { catalogueId } = req.params;
+        if (!catalogueId) {
+            return res.status(400).send({
+                success: false,
+                message: "catalogueId is required",
+            });
+        }
+        const result = await labService.deleteCatalogue(catalogueId);
+        if (!result) {
+
+            return res.status(404).send({
+                success: false,
+                message: "No catalogue found for the provided catalogueId",
+            });
+        }
+        return res.status(200).send({
+            success: true,
+            message: "Successfully deleted the lab catalogue",
+            data: result,
+        });
+    } catch (error) {
+        console.error("Error in deleting lab catalogue:", error);
+        return res.status(500).send({
+            success: false,
+            message: "Error in deleting the lab catalogue",
+            error: error.message,
+        });
+    }
+}
+
+//update the catalogue details
+const updateCatalogueDetails = async (req, res) => {
+    try {
+        const { id, category, description, price, level, title, provider } = req.body;
+        if (!id || !title || !description || !level || !category || !price || !provider) {
+            return res.status(400).send({
+                success: false,
+                message: "All fields are required: id, title, description, level, category, and price",
+            });
+        }
+        const result = await labService.updateCatalogueDetails(id, category, description,price,level,provider,title );
+        console.log(result)
+        if (!result || result.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: "No catalogue found for the provided catalogueId",
+            });
+        }
+        
+        return res.status(200).send({
+            success: true,
+            message: "Successfully updated the catalogue details",
+            data: result,
+        });
+    } catch (error) {
+        console.error("Error in updating catalogue details:", error);
+        return res.status(500).send({
+            success: false,
+            message: "Error in updating catalogue details",
+            error: error.message,
+        });
+    }
+};
 
 //update single vm datacenter user creds running state
 const updateSingleVMDatacenterUserCredRunningState = async (req, res) => {
@@ -412,6 +556,37 @@ const updateSingleVMDatacenterLabContent = async(req,res)=>{
     }
 }
 
+const updateSingleVMAwsLab = async(req,res)=>{
+    try {
+        const labGuidesFile = req.files?.labGuide?.[0]; // new file if any
+        const userGuidesFile = req.files?.userGuide?.[0];
+
+        const { title, description, cpu, ram, os, provider, instance, software, existingLabGuide, existingUserGuide, startDate, endDate, labId } = req.body;
+        const finalLabGuide = [existingLabGuide, labGuidesFile?.path].filter(Boolean);
+        const finalUserGuide = [existingUserGuide, userGuidesFile?.path].filter(Boolean);
+        const softwareArray = software.length > 0 ? JSON.parse(software) : null;
+        const result = await labService.updateSingleVMAwsLab(title, description, cpu, ram, os, provider, instance, softwareArray, finalLabGuide, finalUserGuide, endDate, labId);
+        if (!result) {
+            return res.status(400).send({
+                success: false,
+                message: "Could not update the lab"
+            });
+        }
+        return res.status(200).send({
+            success: true,
+            message: "Successfully updated the lab",
+            data: result
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success: false,
+            message: "Error in updating the lab",
+            error: error.message
+        });
+    }
+}
+
 const getLabOnId = async(req,res)=>{
     try{
         const {labId} = req.body;
@@ -441,14 +616,14 @@ const getLabOnId = async(req,res)=>{
 //assign single vm datacenter lab to organization
 const assignSingleVmDatacenterLab = async (req, res) => {
     try { 
-        const { labId, orgId, assignedBy,startDate,endDate } = req.body;
+        const { labId, orgId,admin_id, assignedBy,startDate,endDate } = req.body;
         if (!labId || !orgId || !assignedBy ) {
             return res.status(400).send({
                 success: false,
                 message: "labId, orgId and assignedBy are required",
             });
         }
-        const result = await labService.createDatacenterLabOrgAssignment(labId, orgId, assignedBy,startDate,endDate);
+        const result = await labService.createDatacenterLabOrgAssignment(labId, orgId,admin_id, assignedBy,startDate,endDate);
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
@@ -472,14 +647,15 @@ const assignSingleVmDatacenterLab = async (req, res) => {
 //get the org assigned labs
 const getOrgAssignedSingleVMDatacenterLab = async(req,res)=>{
     try {
-        const {orgId} = req.body;
-        if( !orgId){
+        console.log(req.body);
+        const {orgId,created_by} = req.body;
+        if( !orgId || !created_by){
             return res.status(404).send({
                 success:false,
-                message:"Please Provide the labid or orgid"
+                message:"Please Provide the labid or admin id"
             })
         }
-        const result = await labService.getOrgAssignedsingleVMDatacenterLab(orgId);
+        const result = await labService.getOrgAssignedsingleVMDatacenterLab(orgId,created_by);
         if(!result || result?.rows?.length === 0){
             return res.status(400).send({
                 success:false,
@@ -503,14 +679,14 @@ const getOrgAssignedSingleVMDatacenterLab = async(req,res)=>{
 //assign single vm datacenter credentials to organization
 const assignSingleVmDatacenterLabCredentialsToOrg = async (req, res) => {
     try {
-        const { labId, orgAssigned, assignedBy } = req.body;
+        const { labId, orgAssigned, assignedBy,admin_id } = req.body;
         if (!labId || !orgAssigned || !assignedBy) {
             return res.status(400).send({
                 success: false,
                 message: "labId, orgAssigned, and assignedBy are required",
             });
         }
-        const result = await labService.assignSingleVmDatacenterCredsToOrg(labId, orgAssigned, assignedBy);
+        const result = await labService.assignSingleVmDatacenterCredsToOrg(labId, orgAssigned, assignedBy,admin_id);
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
@@ -722,19 +898,19 @@ const assignLab = async (req, res) => {
         const sessionToken = cookies.session_token;
         const { lab, userId, assign_admin_id,startDate,endDate } = req.body;
         const response = await labService.assignLab(lab, userId, assign_admin_id,startDate,endDate,sessionToken);
-
+        
         return res.status(200).send({
             success: true,
             message: "Lab assignments processed",
             ...response, // Successful assignments and errors
         });
-    } catch (error) {
-        return res.status(500).send({
-            success: false,
-            message: "Error in assigning the labs",
-            error: error.message,
-        });
-    }
+        } catch (error) {
+                return res.status(500).send({
+                    success: false,
+                    message: "Error in assigning the labs",
+                    error: error.message,
+                });
+        }
 };
 
 //get the single vm datacenter labs 
@@ -873,14 +1049,14 @@ const updateLabsOnConfig = async (req, res) => {
 //update single vm aws
 const updateSingleVMAws =  async(req,res)=>{
     try {
-        const {catalogueName, numberOfDays,hoursPerDay,expiresIn,software,catalogueType,labId} = req.body;
-        if(!catalogueName || !numberOfDays ||!hoursPerDay||!expiresIn||!catalogueType ||!labId){
+        const {catalogueName, numberOfDays,hoursPerDay,expiresIn,software,catalogueType,labId,level,category,price} = req.body;
+        if(!catalogueName || !numberOfDays ||!hoursPerDay||!expiresIn||!catalogueType ||!labId || !level || !category || !price){
             return res.status(400).send({
                 success:false,
                 message:'Please provide all the required fields'
             })
         }
-        const result = await labService.updateSingleVMAws(catalogueName, numberOfDays,hoursPerDay,expiresIn,software,catalogueType,labId);
+        const result = await labService.updateSingleVMAws(catalogueName, numberOfDays,hoursPerDay,expiresIn,software,catalogueType,labId,level,category,price);
         if(!result || !result.length === 0){
             return res.status(404).send({
                 success:false,
@@ -1212,7 +1388,14 @@ const checkLabBatchAssessment = async (req, res) => {
 
 const getLabsConfigured = async (req, res) => {
     try {
-      const labs = await labService.getLabsConfigured();
+        const {admin_id} = req.body;
+      if (!admin_id) {
+        return res.status(400).send({
+          success: false,
+          message: "Admin details are required",
+        });
+      }
+      const labs = await labService.getLabsConfigured(admin_id);
       if (!labs.length) {
         return res.status(404).send({
           success: false,
@@ -1473,5 +1656,10 @@ module.exports = {
     getSingleVmDatacenterLabs,
     updateUserLabTimingsOfSingleVMDatacenter,
     updateSingleVMAws,
-    updateUserLabTimingsOfAwsSingleVMDatacenter
+    updateUserLabTimingsOfAwsSingleVMDatacenter,
+    getAllLabCatalogues,
+    deleteCatalogue,
+    updateCatalogueDetails,
+    getUserPurchasedSinglvmLabs,
+    updateSingleVMAwsLab
 }

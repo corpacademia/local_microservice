@@ -33,7 +33,7 @@ const createTables = async()=>{
         );
         //single-vm datacenter table
         await pool.query(`
-          create table if not exist singlevmdatacenter_lab(
+          create table if not exists singlevmdatacenter_lab(
           lab_id uuid primary key default uuid_generate_v4(),
           user_id uuid,
           title text,
@@ -58,6 +58,42 @@ const createTables = async()=>{
               change_reason TEXT DEFAULT 'cron_job'
             );
         `)
+
+        //create a table for email verification code
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS email_verification_code (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            email VARCHAR(255) NOT NULL,
+            verification_code VARCHAR(6) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            expires_at TIMESTAMP NOT NULL
+          );
+        `);
+
+        //create a table for cart_items
+        await pool.query(`
+                  CREATE TABLE IF NOT EXISTS cart_items (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          labid UUID NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          duration TEXT,
+          price TEXT NOT NULL,
+          quantity TEXT DEFAULT '1',
+          user_id UUID NOT NULL,
+          added_at TIMESTAMP DEFAULT NOW()
+        );
+    `)
+    //store the cart data
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS carts (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID,
+        cart_data JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+     
+      `)
 
         //single-vm lab progress table
         await pool.query(`
@@ -109,6 +145,52 @@ const createTables = async()=>{
         remarks TEXT,
         launched BOOLEAN default false
       );`)
+      //create table for notifications
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS notifications (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          type TEXT NOT NULL, 
+          title TEXT NOT NULL,
+          message TEXT,
+          priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high')),
+          is_read BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          user_id UUID,
+          metadata TEXT[],
+          email_sent BOOLEAN DEFAULT false
+          );
+        `);
+
+      await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_notifications_user_id 
+          ON notifications(user_id);
+      `);
+      //type of notification which is triggered for the lab
+      await pool.query(`
+                CREATE TABLE IF NOT EXISTS lab_notifications (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            lab_id UUID NOT NULL,
+            notification_type TEXT NOT NULL, -- e.g., 'expiry', 'maintenance'
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expiry_date TIMESTAMP,
+            notification_id uuid
+        );
+
+        `)
+        //notification settings for user
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS user_notification_settings (
+          user_id           UUID PRIMARY KEY,
+          emailnotifications TEXT[],
+          inappnotifications TEXT[], 
+          email_digest      TEXT NOT NULL CHECK (email_digest IN ('immediate','hourly','daily','weekly','never')) DEFAULT 'immediate',
+          quiet_hours_enabled BOOLEAN NOT NULL DEFAULT false,
+          quiet_start       TIME,      -- e.g., '22:00'
+          quiet_end         TIME,      -- e.g., '08:00'
+          timezone          TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+          daily_send_hour   SMALLINT NOT NULL DEFAULT 8,  -- local hour to send daily/weekly digests (0–23)
+          weekly_send_day   SMALLINT NOT NULL DEFAULT 1   -- 1=Mon ... 7=Sun (ISO)
+        );`)
 
       //cloudassigned instance for users
       await pool.query(

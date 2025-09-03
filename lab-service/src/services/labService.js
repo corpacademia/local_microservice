@@ -5,6 +5,10 @@ const labQueries = require('./labQueries');
 const queries = require('./labQueries');
 const { spawn } = require('child_process');
 const axios = require('axios');
+const { randomBytes } = require('crypto');
+const { getUserEmail, markEmailAsSent, isWithinQuietHours, nowInTz, emailPlacehoders } = require('./emailNotificationService');
+const { sendNotificationToMail } = require('./notificationServices');
+const { sendNotification } = require('../socket');
 
 const getUserData = async(userId,sessionToken)=>{
   try {
@@ -142,9 +146,9 @@ const getDatacenterLabCredentials = async (labId) => {
     }
 };
 //update single vm datacenter lab
-const updateSingleVmDatacenterLab = async (labId, software, catalogueType,catalogueName) => {
+const updateSingleVmDatacenterLab = async (labId, software, catalogueType,catalogueName,level,category,price) => {
     try {
-        const result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER, [software, catalogueType, labId,catalogueName]);
+        const result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER, [software, catalogueType, labId,catalogueName,level,category,price]);
         if (!result.rows[0]) {
             throw new Error("Could not update the single VM datacenter lab");
         }
@@ -154,6 +158,98 @@ const updateSingleVmDatacenterLab = async (labId, software, catalogueType,catalo
         throw new Error(error.message);
     }
 }
+//get all lab catalogues
+const getAllLabCatalogues = async () => {
+    try {
+        const result = await pool.query(queries.GET_ALL_CATALOGUES);
+        if (!result.rows.length) {
+            throw new Error("No catalogues found");
+        }
+        return result.rows;
+    } catch (error) {
+        console.error("Error in getAllLabCatalogues service:", error.message);
+        throw error;
+    }
+};
+
+//get user purchased labs
+const getUserPurchasedSinglvmLabs = async(userId)=>{
+    try {
+        const result = await pool.query(queries.GET_USER_PURCHASED_SINGLEVM_AWS,[userId]);
+        if(!result.rows.length){
+            return [];
+        }
+        return result.rows;
+    } catch (error) {
+        console.log('Error in getting the single vm purchased labs');
+        throw error;
+    }
+}
+
+//delete catalogue
+const deleteCatalogue = async (catalogueId) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(queries.UPDATE_CREATELAB_CATALOGUE, [catalogueId]);
+    await client.query(queries.UPDATE_SINGLEVM_CATALOGUE, [catalogueId]);
+    await client.query(queries.UPDATE_VMCLUSTER_CATALOGUE, [catalogueId]);
+    await client.query(queries.UPDATE_CLOUDSLICE_CATALOGUE, [catalogueId]);
+
+    await client.query('COMMIT');
+
+    return { success: true, message: 'Catalogue updated to private' };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in deleteCatalogue service:', error.message);
+    throw new Error('Failed to delete catalogue');
+  } finally {
+    client.release();
+  }
+};
+
+//update catalogue update details
+
+const updateCatalogueDetails = async (
+  labId,
+  category,
+  description,
+  price,
+  level,
+  provider,
+  cataloguename
+) => {
+  const values = [labId, category, description, price, level, cataloguename];
+
+  const updateQueries = [
+    queries.UPDATE_CREATELAB_CATALOGUE_DETAILS,
+    queries.UPDATE_SINGLEVM_CATALOGUE_DETAILS,
+    queries.UPDATE_VMCLUSTER_CATALOGUE_DETAILS,
+    queries.UPDATE_CLOUDSLICE_CATALOGUE_DETAILS,
+  ];
+
+  try {
+    for (const query of updateQueries) {
+      const result = await pool.query(query, values);
+
+      // Check if any row was updated
+      if (result.rowCount > 0) {
+        console.log(`Updated successfully `);
+        return result.rows[0]; // Stop after first successful update
+      }
+    }
+
+    // If no update happened in any table
+    throw new Error('Catalogue update failed. Lab ID not found in any table.');
+  } catch (error) {
+    console.error('Error updating catalogue details:', error.message);
+    throw new Error(error.message);
+  }
+};
+
+
+
 //update single vm user cred running state
 const  updateSingleVMDatacenterUserCredRunningState = async (isrunning, User, labId) => {
     try {
@@ -220,14 +316,36 @@ for (const cred of existingCreds.rows) {
         }
 }
 
-//assign datacenter lab to organization
-const createDatacenterLabOrgAssignment = async (labId, orgId, assignedBy,startDate,endDate) => {
+//update single vm aws lab
+const updateSingleVMAwsLab = async(title,description,cpu,ram,os,provider,instance,software,labGuide,userGuide,endDate,labId)=>{
     try {
-        const checkAlreadyAssigned = await pool.query(queries.GET_SINGLEVM_DATACENTER_ORG_LAB,[labId,orgId]);
+        if(!title || !description ||!cpu ||!ram||!os||!provider||!instance||!software||!labGuide||!userGuide||!endDate||!labId){
+            throw new Error("Please Provide All The Required Fields")
+        }
+        const result = await pool.query(labQueries.UPDATE_SINGLEVM_AWS_CONTENT,[title,description,cpu,ram,os,provider,instance,software,labGuide,userGuide,endDate,labId]);
+        if(!result.rows.length){
+            throw new Error("No lab is found with this id to Edit")
+        }
+        return result.rows[0];
+    } catch (error) {
+        console.log("Error in editing the lab");
+        throw new Error(error.message);
+    }
+}
+
+//assign datacenter lab to organization
+const createDatacenterLabOrgAssignment = async (labId, orgId,admin_id, assignedBy,startDate,endDate) => {
+    try {
+        const checkAlreadyAssigned = await pool.query(queries.GET_SINGLEVM_DATACENTER_ORG_LAB,[labId,orgId,admin_id]);
         if(checkAlreadyAssigned.rows.length){
             throw new Error("Lab Already Assigned")
         }
-        const result = await pool.query(queries.INSERT_DATACENTER_VM_ORGASSIGNMENT, [labId, orgId, assignedBy,startDate,endDate]);
+        const checkCredentialsAvailable = await pool.query(queries.GET_DATACENTER_LAB_CREDS_ONLABID,[labId]);{
+            if(!checkCredentialsAvailable.rows.length){
+                throw new Error("No credentials available for this lab");
+            }
+        }
+        const result = await pool.query(queries.INSERT_DATACENTER_VM_ORGASSIGNMENT, [labId, orgId,admin_id, assignedBy,startDate,endDate]);
         if (!result.rows[0]) {
             throw new Error("Could not assign the datacenter lab to the organization");
         }
@@ -262,9 +380,9 @@ const deleteSingleVMDatacenterLabFromOrg = async(labId,orgId)=>{
 }
 
 //assign single vm datacenter credentials to users
-const assignSingleVmDatacenterCredsToOrg = async(labId,orgId,assignedBy)=>{
+const assignSingleVmDatacenterCredsToOrg = async(labId,orgId,assignedBy,admin_id)=>{
     try {
-        const result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_CREDS, [orgId,assignedBy, labId]);
+        const result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_CREDS, [orgId,assignedBy, labId,admin_id]);
         if (!result.rows[0]) {
             throw new Error("Could not assign the datacenter lab credentials to the organization");
         }
@@ -289,9 +407,9 @@ const editSingleVmDatacenterCreds = async ( username, password, ip, port, protoc
     }
 }
 //get the orgassignedsinglevmdatacenter lab
-const getOrgAssignedsingleVMDatacenterLab = async(orgid)=>{
+const getOrgAssignedsingleVMDatacenterLab = async(orgid,created_by)=>{
     try {
-        const result = await pool.query(labQueries.GET_SINGLEVM_DATACENTER_ORG,[orgid]);
+        const result = await pool.query(labQueries.GET_SINGLEVM_DATACENTER_ORG,[orgid,created_by]);
         if(!result.rows.length){
             return [];
             // throw new Error("Could not fetch org assigned labs");
@@ -497,7 +615,6 @@ const assignLab = async (lab, userIds, assign_admin_id,startDate,endDate,session
             if (checkAlreadyAssigned.rows.length > 0) {
                 throw new Error(`Lab already assigned to ${userData.name}`)
             }
-
             // Insert lab assignment into the database
             const result = await pool.query(labQueries.ASSIGN_LAB, [
                 lab,
@@ -506,9 +623,54 @@ const assignLab = async (lab, userIds, assign_admin_id,startDate,endDate,session
                 endDate,
                 assign_admin_id,
             ]);
-
             if (result.rows.length > 0) {
                 successfulAssignments.push(result.rows[0]);
+                await pool.query('BEGIN');
+                    const insertNotification = await pool.query(labQueries.INSERT_NOTIFICATION, ['lab_assigned', 'Lab Assigned', `A new lab has been assigned to you. Lab ID: ${lab}`,'medium', user,[JSON.stringify({
+                labId: lab,
+                assigned_by: assign_admin_id,
+                assignment_id: result.rows[0]?.id ?? null, 
+                start_date: startDate,
+                end_date: endDate,
+                })] ]);
+                const userSettings  = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user]);
+                if(userSettings.rows.length > 0){
+                 const settings = userSettings.rows[0];
+                         // ---- EMAIL NOTIFICATIONS ----
+                 if (settings.emailnotifications.includes("lab_assigned")) {
+                          if (settings.email_digest !== "never" && settings.email_digest === "immediate") {
+                            const localTime = nowInTz(settings?.timezone || "UTC");
+                            const inQuiet = settings?.quiet_hours_enabled
+                              ? isWithinQuietHours(localTime, settings.quiet_start, settings.quiet_end)
+                              : false;
+                
+                            if (!inQuiet) {
+                              const htmlTemplate = path.join(
+                                process.env.EMAIL_TEMPLATE_PATH
+                              );
+                              const placeholders = await emailPlacehoders(insertNotification.rows[0], lab, await getUserEmail(user));
+                              await sendNotificationToMail(htmlTemplate,placeholders);
+                              //  Mark email sent AFTER notification is already in DB
+                              await markEmailAsSent(insertNotification.rows[0]?.id);
+                            }
+                          }
+                }
+                                    // ---- IN-APP NOTIFICATIONS ----
+                if (settings.inappnotifications.includes("lab_assigned")) {
+                          await sendNotification({
+                            userId: user,
+                            notification: insertNotification.rows[0],
+                          });
+                
+                          await pool.query(labQueries.INSERT_LAB_NOTIFICATION, [
+                            lab,
+                            "lab_assigned",
+                            endDate,
+                            insertNotification.rows[0]?.id,
+                          ]);
+                }}
+                await pool.query('COMMIT');
+                
             } else {
                 errors.push({
                     user_id: user,
@@ -531,7 +693,9 @@ const getAssignLabOnId = async (userId) => {
         const result = await pool.query(queries.GET_ASSIGNED_LABS, [userId]);
       
         if (!result.rows) {
-            throw new Error("Error in retrieving the labs");
+            const result = await pool.query(queries.GET_ASSIGNED_PURCHASED_LABS,[userId]);
+            if(!result.rows) return [];
+            
         }
 
         return result.rows;
@@ -544,10 +708,14 @@ const getAssignLabOnId = async (userId) => {
 //get user labs on labid and userid
 const getAssignLabOnLabId = async(labId,userId) =>{
     try {
-        const result = await pool.query(queries.GET_ASSIGNED_LABS_ON_LABID,[labId,userId]);
+        let result;
+        result = await pool.query(queries.GET_ASSIGNED_LABS_ON_LABID,[labId,userId]);
 
         if(!result.rows[0]){
+            result = await pool.query(queries.GET_ASSIGNED_PURCHASED_LABS_ON_LABID,[labId,userId]) 
+            if(!result.rows[0]){
             throw new Error("Error in retrieving the lab");
+        }
         }
         return result.rows[0];
 
@@ -627,9 +795,9 @@ const updateSingleVMAws =  async(catalogueName,
   hoursPerDay,
   expiresIn,
   software,
-  catalogueType,labId)=>{
+  catalogueType,labId,level,category,price)=>{
     try {
-        const update =  await pool.query(labQueries.UPDATE_SINGLEVM_AWS,[catalogueName,catalogueType,numberOfDays,hoursPerDay,software,expiresIn, labId]);
+        const update =  await pool.query(labQueries.UPDATE_SINGLEVM_AWS,[catalogueName,catalogueType,numberOfDays,hoursPerDay,software,expiresIn, labId,level,category,price]);
         if(!update.rows.length){
             return []
         }
@@ -660,9 +828,11 @@ const updateAwsInstanceDetailsOfUsers = async (lab_id, user_id, state, isStarted
     if(!isStarted){
         const result = await pool.query(queries.UPDATE_USER_INSTANCE_STATES, [true,state, lab_id, user_id]);
          const update = await pool.query(queries.UPDATE_USER_SINGLEvM_AWS_STATUS,['started', lab_id, user_id]);
-         console.log(update.rows);
         if(!update.rows.length){
+            const update = await pool.query(queries.UPDATE_USER_SINGLEvM_AWS_PURCHASED_STATUS,['started', lab_id, user_id])
+            if(!update.rows.length){
             throw new Error("No lab instance found for this user");
+        }
         }
         return result.rows[0];
     }
@@ -760,8 +930,9 @@ const checkLabBatchAssessment = async (admin_id, org_id) => {
     return data.rows;
 };
 
-const getLabsConfigured = async () => {
-    const labs = await pool.query(labQueries.GET_CONFIGURED_LABS);
+const getLabsConfigured = async (admin) => {
+    const labs = await pool.query(labQueries.GET_CONFIGURED_LABS, [admin]);
+    // console.log("Labs Configured:", labs.rows);
     return labs.rows;
   };
 
@@ -889,7 +1060,7 @@ const getCount = async (userId, user) => {
   try {
     let result;
 
-    if (user.role === 'superadmin') {
+    if (user.role === 'superadmin' || user.role === 'orgsuperadmin') {
       result = await pool.query(queries.GET_COUNT, [userId]);
     } else if (user.role === 'orgadmin') {
       result = await pool.query(queries.GET_ORG_LAB_COUNT, [userId,user.org_id]);
@@ -980,5 +1151,10 @@ module.exports = {
     getAllSingleVMDatacenterLabs,
     updateUserLabTimingsOfSingleVMDatacenter,
     updateSingleVMAws,
-    updateUserLabTimingsOfAwsSingleVMDatacenter
+    updateUserLabTimingsOfAwsSingleVMDatacenter,
+    getAllLabCatalogues,
+    deleteCatalogue,
+    updateCatalogueDetails,
+    getUserPurchasedSinglvmLabs,
+    updateSingleVMAwsLab
 }

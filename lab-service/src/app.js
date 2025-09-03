@@ -9,12 +9,17 @@ const fs = require('fs');
 const mime = require('mime-types');
 
 const app = express();
+const { insertPaymentAndAssignLab } = require('./controllers/labCartController'); 
 
 //tables
 const tables = require('./db/labTables');
 tables;
 
 //middlewares
+
+
+// Mount it before any bodyParser middleware
+app.use('/webhook', express.raw({ type: 'application/json' }), insertPaymentAndAssignLab);
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors({
@@ -22,6 +27,10 @@ app.use(cors({
     credentials: true
 }));
 app.use(cookieParser());
+
+// Serve files from the "generated" folder inside "controllers"
+app.use('/generated', express.static(path.join(__dirname, 'controllers')));
+
 
 //routing
 app.use('/uploads/:filename', (req, res) => {
@@ -39,8 +48,8 @@ app.use('/uploads/:filename', (req, res) => {
     res.status(404).send('File not found');
   }
 });
-app.use('/',labRouter);
 
+app.use('/',labRouter);
 
 
 
