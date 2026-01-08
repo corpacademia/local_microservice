@@ -24,7 +24,10 @@ const {
     deleteRandomUsers,
     updateUserProfile,
     sendVerificationEmail,
-    verifyEmailCode
+    verifyEmailCode,
+    uploadBulkUsers,
+    userApprove,
+    resetPassword
 } = require('../controllers/authController');
 
 //api router
@@ -49,6 +52,8 @@ router.post('/signup',signupController);
 router.post('/login',loginController);
 router.get("/allUsers",getAllUsers);
 router.post('/addUser',addUser);
+router.post('/bulkUploadOrgUsers',uploadBulkUsers);
+router.put('/updateUserStatus/:userId',userApprove);
 router.post('/getuserdata/:id',getUserData);
 router.put('/updateUserOrganization',updateUserOrganization);
 router.put('/updateUserRole',updateUserRole);
@@ -73,6 +78,7 @@ router.get('/uploads/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 router.post('/send-verification-code',sendVerificationEmail);
-router.post('/verify-code',verifyEmailCode)
+router.post('/verify-code',verifyEmailCode);
+router.post('/reset-password',resetPassword)
 
  module.exports = router;

@@ -100,7 +100,7 @@ def update_credentials_in_db(username, password, console_url, role, labid, orgid
             dbname="golab"
         )
         cur = conn.cursor()
-        if role == "superadmin" or role == "orgsuperadmin" :
+        if role == "superadmin"  :
             
             table = "cloudslicelab"
             query = f"""
@@ -110,7 +110,7 @@ def update_credentials_in_db(username, password, console_url, role, labid, orgid
             """
             cur.execute(query, (username, password, console_url, labid))
 
-        elif role == "orgadmin":
+        elif   role == "orgsuperadmin" or role == "labadmin":
             table = "cloudsliceorgassignment"
             if orgid is None:
                 print("Error: orgid is required for orgadmin role.")
@@ -168,7 +168,7 @@ def main():
     user_id = None
     purchased = False
 
-    if role == "orgadmin" and len(sys.argv) >= 6:
+    if role == "orgsuperadmin" and len(sys.argv) >= 6:
         orgid = sys.argv[5]
 
     if role == "user":

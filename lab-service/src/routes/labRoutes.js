@@ -26,6 +26,7 @@ const { createLab,
     getAssignLabOnLabId,
     UpdateSingleVmLabStatus,
     getCount,
+    getAllLabs,
     getCloudSliceOrgLabs,
     createSingleVmDatacenterLab,
     getDatacenterLabOnAdminId,
@@ -54,7 +55,10 @@ const { createLab,
     deleteCatalogue,
     updateCatalogueDetails,
     getUserPurchasedSinglvmLabs,
-    updateSingleVMAwsLab
+    updateSingleVMAwsLab,
+    getUserPurchasedSinglvmLabsOnLabId,
+    getAllUserPurchasedLabs,
+    getAllOrganizationAssignedLabs
 } = require('../controllers/labController');
 
 const {
@@ -64,9 +68,11 @@ const {
   deleteCartItemsOnUserId,
   updateCartItem,
   stripeCheckout,
+  instaMojoCheckout,
   getTransactionDetails,
   exportTransactions,
-  userTransactions
+  userTransactions,
+  insertFreeLab
 } = require('../controllers/labCartController');
 
 const {
@@ -77,6 +83,10 @@ const {
   setUserNotificationSettings,
   getUserNotificationSettings
 } = require('../controllers/notificationController');
+
+const {
+  connectGuacamole
+} = require('../config/guacamoleConfig');
 
 const router = express.Router();
 
@@ -98,6 +108,7 @@ const storage = multer.diskStorage({
 // Create the upload middleware using multer
 const upload = multer({ storage });
 
+router.post('/get-guac-url',connectGuacamole)
 router.post('/labconfig',createLab);
 router.post('/createSingleVmDatacenterLab',createSingleVmDatacenterLab);
 router.get('/getCatalogues',getAllLab);
@@ -165,6 +176,7 @@ router.delete('/clearCart/:userId', deleteCartItemsOnUserId);
 router.put('/updateCartItem/:cartItemId', updateCartItem);
 router.post('/create-checkout-session', stripeCheckout);
 router.post('/getSingleVMUserPurchsedLabs',getUserPurchasedSinglvmLabs)
+router.post('/getUserPurchasedSinglvmLabsOnLabId',getUserPurchasedSinglvmLabsOnLabId)
 router.get('/notifications/:userId',getNotificationsOfUser);
 router.patch('/notifications/:notificationId/read',markAsRead);
 router.patch('/notifications/:userId/read-all',markAllAsRead);
@@ -174,6 +186,10 @@ router.get('/organization/:orgId/export',exportTransactions);
 router.get('/user/:userId/transactions', userTransactions);
 router.post('/setNotificationSettings/:userId',setUserNotificationSettings);
 router.get('/notifications/preferences/:userId',getUserNotificationSettings);
+router.post('/enroll',insertFreeLab);
+router.post('/getAllUserPurchasedLabs',getAllUserPurchasedLabs);
+router.get('/getOrgAssignedLabs/:orgId',getAllOrganizationAssignedLabs);
+router.get('/getAllLabs',getAllLabs)
 
 
 module.exports = router;

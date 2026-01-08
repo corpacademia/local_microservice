@@ -1,5 +1,5 @@
 module.exports = {
-    INSERT_LAB_DETAILS:`INSERT INTO vmclusterdatacenter_lab(user_id,title,description,type,platform,labguide,userguide,startdate,enddate,guacamole_name,guacamole_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    INSERT_LAB_DETAILS:`INSERT INTO vmclusterdatacenter_lab(user_id,title,description,type,platform,labguide,userguide,startdate,enddate,guacamole_name,guacamole_url,learning_objectives,prerequisites,target_audience,key_technologies,additional_details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
     INSERT_VM_DETAILS:`INSERT INTO vmclusterdatacenter_vms(lab_id,vmid,vmname,protocol,created_at) VALUES($1,$2,$3,$4,NOW()) RETURNING *`,
     INSERT_USERVM_DETAILS:`INSERT INTO vmclusterdatacenter_uservms(labid,vmid,username,password,ip,port,usergroup) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
     
@@ -22,10 +22,10 @@ module.exports = {
     GET_CREDENTIALS_DETAILS_ON_CREDID:`SELECT * FROM vmclusterdatacenter_uservms where id=$1`,
 
     //for organization
-    GET_VMCLUSTER_ORGASSIGNMENT:`SELECT * FROM vmclusterdatacenterorgassignment where orgid=$1`,
-    GET_VMCLUSTER_ORGASSIGNMENT_LAB:`SELECT * FROM vmclusterdatacenterorgassignment where labid=$1 and orgid=$2`,
+    GET_VMCLUSTER_ORGASSIGNMENT:`SELECT * FROM vmclusterdatacenterorgassignment where orgid=$1 `,
+    GET_VMCLUSTER_ORGASSIGNMENT_LAB:`SELECT * FROM vmclusterdatacenterorgassignment where labid=$1 and orgid=$2 and admin_id=$3`,
     GET_ALL_LABS_ON_LABID:`SELECT * FROM vmclusterdatacenter_lab where labid=$1`,
-    GET_ALL_USERVM_CREDS_FOR_ID:`SELECT * FROM vmclusterdatacenter_uservms where labid=$1 and orgassigned=$2`,
+    GET_ALL_USERVM_CREDS_FOR_ID:`SELECT * FROM vmclusterdatacenter_uservms where labid=$1 and orgassigned=$2 `,
 
     DELETE_LAB_FROM_ADMIN:'DELETE FROM vmclusterdatacenter_lab where labid=$1',
     DELETE_VMS_ON_LABID:`DELETE FROM vmclusterdatacenter_vms where lab_id=$1`,
@@ -37,7 +37,7 @@ module.exports = {
 
     //From organization delete
     DELETE_USER_CREDENTIAL_GROUPS:`UPDATE  user_credential_groups SET orgassigned = NULL , USERASSIGNED = NULL WHERE labid=$1 and orgassigned = $2`,
-    DELETE_DATACENTER_USERVMS:`UPDATE vmclusterdatacenter_uservms SET orgassigned = NULL WHERE labid=$1 and orgassigned = $2`,
+    DELETE_DATACENTER_USERVMS:`UPDATE vmclusterdatacenter_uservms SET orgassigned = NULL, admin_id = NULL WHERE labid=$1 and orgassigned = $2`,
     DELETE_DATACENTER_USER:`DELETE FROM vmclusterdatacenteruserassignment WHERE labid=$1 and assigned_by=$2`,
     DELETE_DATACENTER_ORG_ASSIGNMENT:`DELETE FROM vmclusterdatacenterorgassignment WHERE labid=$1 AND orgid=$2`,
 
@@ -76,14 +76,14 @@ module.exports = {
     UPDATE_USER_VMCLUSTER_DATACENTER_TIME:`UPDATE vmclusterdatacenteruserassignment set startdate=$1,enddate=$2 where labid=$3 and user_id=$4 RETURNING *`,
     UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS:`UPDATE vmclusterdatacenteruserassignment set status=$1 where labid=$2 and user_id=$3 RETURNING *`,
     UPDATE_ORG_VMCLUSTER_DATACENTER_TIME:`UPDATE vmclusterdatacenterorgassignment set startdate=$1,enddate=$2 where labid=$3 and orgid=$4 RETURNING *`,
-    UPDATE_USER_GROUP_CREDS:`UPDATE user_credential_groups set orgassigned=$1 where orgassigned IS NULL and labid=$2 RETURNING *`,
+    UPDATE_USER_GROUP_CREDS:`UPDATE user_credential_groups set orgassigned=$1 ,admin_id=$3 where orgassigned IS NULL and labid=$2 RETURNING *`,
     UPDATE_VMCLUSTER_DATACENTER_LAB_DETAILS:`UPDATE vmclusterdatacenter_lab set title=$1,description=$2,startdate=$3,enddate=$4,software=$5,userguide=$6,labguide=$7 where labid=$8 RETURNING *`,
     UPDATE_VMCLUSTER_DATACENTER_VMS:`UPDATE vmclusterdatacenter_vms set vmname=$1,protocol=$2 where lab_id=$3 and vmid=$4 RETURNING *`,
     UPDATE_VMCLUSTER_DATACENTER_USERVMS:`UPDATE vmclusterdatacenter_uservms set username=$1,password=$2,ip=$3,port=$4,usergroup=$5 where labid=$6 and vmid=$7 and id=$8 RETURNING *`,
     UPDATE_VMCLUSTER_DATACENTER_USERVMS_UPDATE:`UPDATE vmclusterdatacenter_uservms set username=$1,password=$2,ip=$3,port=$4 where id=$5 RETURNING *`,
-    UPDATE_VMCLUSTER_DATACENTER_LAB:`UPDATE vmclusterdatacenter_lab set cataloguename=$1,cataloguetype=$2,software=$3 where labid=$4 RETURNING *`,
-    INSERT_VMCLUSTER_DATACENTER_ORG_ASSIGNMENT:`INSERT INTO vmclusterdatacenterorgassignment (labid,orgid,assignedby,startdate,enddate,assigned_at) VALUES($1,$2,$3,$4,$5,NOW()) RETURNING *`,
-    UPDATE_VMCLUSTER_DATACENTER_USERVMS_ORG_ASSIGNMENT:`UPDATE vmclusterdatacenter_uservms set orgassigned=$1 where orgassigned IS NULL and labid=$2 RETURNING *`,
+    UPDATE_VMCLUSTER_DATACENTER_LAB:`UPDATE vmclusterdatacenter_lab set cataloguename=$1,cataloguetype=$2,software=$3,level=$5,category=$6,price=$7 where labid=$4 RETURNING *`,
+    INSERT_VMCLUSTER_DATACENTER_ORG_ASSIGNMENT:`INSERT INTO vmclusterdatacenterorgassignment (labid,orgid,admin_id,assignedby,startdate,enddate,assigned_at) VALUES($1,$2,$3,$4,$5,$6,NOW()) RETURNING *`,
+    UPDATE_VMCLUSTER_DATACENTER_USERVMS_ORG_ASSIGNMENT:`UPDATE vmclusterdatacenter_uservms set orgassigned=$1 ,admin_id=$3 where orgassigned IS NULL and admin_id is null and labid=$2 RETURNING *`,
 
     UPDATE_VMCLUSTER_DATACENTER_VMS_PROTOCOL:`UPDATE vmclusterdatacenter_vms set protocol=$1 where vmid=$2 RETURNING *`,
     UPDATE_VMCLUSTER_DATACENTER_USERVMS_DISABLE:`UPDATE vmclusterdatacenter_uservms set disabled=$1 where id=$2 RETURNING *`,

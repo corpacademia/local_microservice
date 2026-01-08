@@ -54,15 +54,16 @@ const getAllAwsServices = async () => {
     }
 };
 
-const createCloudSliceLab = async (createdBy,labData) => {
-    const { services, region, startDate, endDate, cleanupPolicy, platform, cloudProvider, title, description, labType, credits,accountType } = labData;
+const createCloudSliceLab = async (createdBy,labDocsArray,userDocsArray,labData) => {
+
+    const { services, region, startDate, endDate, cleanupPolicy, platform, cloudProvider, title, description, labType, credits,accountType,learningObjectives,prerequisites,targetAudience,technologies,additionalDetails } = labData;
 
     if (!services || !region || !startDate || !endDate || !cleanupPolicy  || !platform || !cloudProvider || !title || !description || !labType || !accountType) {
         throw new Error('Please provide all required fields');
     }
      try {
         const result = await pool.query(cloudSliceAwsQueries.INSERT_LAB_DATA,
-            [createdBy,JSON.stringify(services), region, startDate, endDate, cleanupPolicy, platform, cloudProvider, title, description, labType, credits,accountType]);
+            [createdBy,services, region, startDate, endDate, cleanupPolicy, platform, cloudProvider, title, description, labType, credits,accountType,labDocsArray,userDocsArray,learningObjectives,prerequisites,targetAudience,[technologies],additionalDetails]);
         return result.rows[0];
     } catch (error) {
         console.log(error);
@@ -77,8 +78,8 @@ const createCloudSliceLabWithModules = async (labData,filesArray) => {
         if (!createdBy || !labConfig || !modules) {
             throw new Error('Please provide all required fields');
         }
+        
         const {cloudProvider,description,endDate,labType,platform,region,services,startDate,title} = labConfig;
-
         if ( !cloudProvider || !description || !endDate || !labType || !platform || !region  || !startDate || !title) {
             throw new Error('Please provide all required fields in labConfig');
         }
@@ -705,9 +706,9 @@ const getCount = async () => {
     }
 }
 //update the catalogue details
-const updateCatalogueDetails = async(catalogueName,catalogueType,labId)=>{
+const updateCatalogueDetails = async(catalogueName,catalogueType,labId,level,category,price)=>{
     try {
-        const catalogueUpdate = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB,[catalogueName,catalogueType,labId]);
+        const catalogueUpdate = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB,[catalogueName,catalogueType,labId,level,category,price]);
         if(!catalogueUpdate.rows.length){
             return [];
         }
@@ -719,7 +720,7 @@ const updateCatalogueDetails = async(catalogueName,catalogueType,labId)=>{
 }
 
 //organization assignment
-const cloudSliceLabOrgAssignment = async(sliceId,organizationId,userId,startDate,endDate)=>{
+const cloudSliceLabOrgAssignment = async(sliceId,organizationId,admin_id,userId,startDate,endDate)=>{
     try {
         // if(isPublic){
         //     const catalogueUpdate = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB,[true,labId]);
@@ -730,11 +731,11 @@ const cloudSliceLabOrgAssignment = async(sliceId,organizationId,userId,startDate
         if(organizationId === 'none'){
              return true
         }
-        const checkOrgAssignment = await pool.query(cloudSliceAwsQueries.CHECK_LAB_EXISTS,[organizationId,sliceId]);
+        const checkOrgAssignment = await pool.query(cloudSliceAwsQueries.CHECK_LAB_EXISTS,[organizationId,sliceId,admin_id]);
         if (checkOrgAssignment.rows.length) {
            throw new LabAssignmentError("Lab already assigned", checkOrgAssignment.rows[0]);
         }
-        const result = await pool.query(cloudSliceAwsQueries.INSERT_ORG_ASSIGNMENT,[sliceId,organizationId,userId,startDate,endDate]);
+        const result = await pool.query(cloudSliceAwsQueries.INSERT_ORG_ASSIGNMENT,[sliceId,organizationId,admin_id,userId,startDate,endDate]);
         if (!result.rows.length) {
             throw new Error('No lab found with this id');
         }
@@ -746,15 +747,107 @@ const cloudSliceLabOrgAssignment = async(sliceId,organizationId,userId,startDate
 }
 
 //GET ALL LABS FROM ORGANIZATION ASSIGNMENT
-const getAllLabsFromOrgAssignment = async(organizationId)=>{
+const getAllLabsFromOrgAssignment = async(organizationId,admin_id)=>{
     try {
-        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT,[organizationId]);
-       
+        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENTS,[organizationId]);
+        if (!result.rows.length) {
+            return [];
+        }
         return result.rows;
     } catch (error) {
         console.log(error);
-        throw new Error('Error in getAllLabsFromOrgAssignment function', error);
+        throw error;
         
+    }
+}
+
+//get cloudslice purchased labs
+const getUserPurchasedLabs = async(userId) =>{
+    try {
+        const result = await pool.query(cloudSliceAwsQueries.GET_USER_PURCHASED_LABS,[userId]);
+        if(!result.rows.length){
+            return [];
+        }
+         const assignments = result.rows; // contains labid + enddate per user
+       const allLabs = [];
+
+    for (const assignment of assignments) {
+      const { labid,start_date, end_date } = assignment;
+
+      const labResult = await pool.query(cloudSliceAwsQueries.GET_LABS_ON_ID, [labid]);
+
+      if (!labResult.rows.length) {
+        throw new Error(`No lab found with id ${labid}`);
+      }
+
+      // Merge lab data with assignment-specific fields like enddate
+      allLabs.push({
+        ...labResult.rows[0],
+        ...assignment,
+        title:labResult.rows[0].cataloguename,
+        startdate:start_date || null, // override the user lab start date
+        enddate:end_date || null, // override or attach user-specific enddate
+        status:assignment.status,
+        duration:assignment.duration
+      });
+    }
+
+    return allLabs;
+    } catch (error) {
+        console.log(error);
+        throw error;
+    }
+}
+
+//get cloudslice purchased labs on id
+const getUserPurchasedLabOnId = async(labId) =>{
+    try {
+        const result = await pool.query(cloudSliceAwsQueries.GET_USER_PURCHASED_LAB_ON_ID,[labId]);
+        if(!result.rows.length){
+            return [];
+        }
+         const assignments = result.rows; // contains labid + enddate per user
+       const allLabs = [];
+
+    for (const assignment of assignments) {
+      const { labid,start_date, end_date } = assignment;
+
+      const labResult = await pool.query(cloudSliceAwsQueries.GET_LABS_ON_ID, [labid]);
+
+      if (!labResult.rows.length) {
+        throw new Error(`No lab found with id ${labid}`);
+      }
+
+      // Merge lab data with assignment-specific fields like enddate
+      allLabs.push({
+        ...labResult.rows[0],
+        ...assignment,
+        title:labResult.rows[0].cataloguename,
+        startdate:start_date || null, // override the user lab start date
+        enddate:end_date || null, // override or attach user-specific enddate
+        status:assignment.status,
+        duration:assignment.duration
+      });
+    }
+
+    return allLabs;
+    } catch (error) {
+        console.log(error);
+        throw error;
+    }
+}
+
+//update purchased labs dates
+const updateDates = async(labId,userId,duration,status,launched)=>{
+    try {
+        const update = await pool.query (cloudSliceAwsQueries.UPDATE_DATES_PURCHASED_LABS,[labId,userId,duration,status,launched]);
+        if(!update){
+            throw new Error("No lab is found with this id");
+        }
+        return update.rows[0];
+    } catch (error) {
+        console.log(error);
+        throw error;
     }
 }
 
@@ -820,7 +913,7 @@ const cloudSliceLabUserAssignment = async (data,sessionToken) => {
         );
   
         if (!result.rows.length) {
-          throw new Error('No lab found with this id');
+          throw new Error('Could not assign lab to user');
         }
   
         insertedRows.push(result.rows[0]);
@@ -874,9 +967,9 @@ const getAllLabsFromUserAssignment = async (userId) => {
 
 
 //GET THE LAB IDS OF USER ASSIGNMENT 
-const getAllLabDetailsForOrgAssignment = async(orgId)=>{
+const getAllLabDetailsForOrgAssignment = async(orgId,adminId)=>{
     try {
-        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT,[orgId]);
+        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT,[orgId,adminId]);
         if (!result.rows.length) {
             throw new Error('No lab found with this id');
         }
@@ -915,12 +1008,19 @@ const getUserAssignedLabStatus = async(userId)=>{
 }
 
 //DELETE CLOUDSLICE LAB FOR USER WIHT USERID AND LABID
-const deleteCloudSliceLabForUser = async(labId,userId)=>{
+const deleteCloudSliceLabForUser = async(labId,userId,purchased)=>{
     try {
         if(!labId || !userId) {
             throw new Error('Please provide all required fields in lab assignment');
         }
-        const result = await pool.query(cloudSliceAwsQueries.DELETE_CLOUD_SLICE_USER_ASSIGNMENT_ON_LABID_USERID,[labId,userId]);
+        let result;
+        if(purchased){
+             result = await pool.query(cloudSliceAwsQueries.DELETE_CLOUD_SLICE_USER_PURCHASED_ON_LABID_USERID,[labId,userId]);
+        }
+        else{
+             result = await pool.query(cloudSliceAwsQueries.DELETE_CLOUD_SLICE_USER_ASSIGNMENT_ON_LABID_USERID,[labId,userId]);
+        }
+        
         if (!result.rows.length) {
             throw new Error('No lab found with this id');
         }
@@ -991,7 +1091,7 @@ const getUserQuizExerciseStatus = async(moduleId,userId)=>{
     try {
         const result = await pool.query(cloudSliceAwsQueries.GET_USER_QUIZ_EXERCISE_STATUS,[moduleId,userId]);
         if (!result.rows.length) {
-            throw new Error('No lab found with this id');
+            return [];
         }
         return result.rows;
     } catch (error) {
@@ -1034,12 +1134,18 @@ const updateCloudSliceLabStatus = async(data)=>{
 //update cloudslice lab running state
 const updateCloudSliceLabRunningState = async(data)=>{
     try {
-        console.log(data)
-        const {labId, userId ,isRunning } = data;
+        const {labId, userId ,isRunning,purchased } = data;
         if(!labId || !userId){
             throw new Error('Please provide the labid or userid')
         }
-        const result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_USER_RUNNING,[isRunning,labId,userId])
+        let result;
+        if(purchased){
+            result = await pool.query(cloudSliceAwsQueries.UPDATE_PURCHASED_CLOUDSLICELAB_USER_RUNNING,[isRunning,labId,userId])
+        }
+        else{
+            result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_USER_RUNNING,[isRunning,labId,userId])
+        }
+        
         if (!result.rows.length) {
             throw new Error('No lab found with this id');
         }
@@ -1054,7 +1160,7 @@ const updateCloudSliceLabRunningState = async(data)=>{
 const updateCloudSliceLabStatusOfOrg = async(data)=>{
     try {
        const {labId,orgId,status,launched} = data;
-       if(!labId || !orgId || !status || !launched){
+       if(!labId || !orgId || !status ){
            throw new Error("Please Provide all the required fields")
        }
        const result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_ORG_STATUS,[status,launched,labId,orgId]);
@@ -1068,12 +1174,19 @@ const updateCloudSliceLabStatusOfOrg = async(data)=>{
     }
 }
 //update lab status of user assigned labs
-const updateCloudSliceLabOfUser = async(status,launched,labId,userId)=>{
+const updateCloudSliceLabOfUser = async(status,launched,labId,userId,purchased)=>{
     try {
         if(!labId || !userId){
             throw new Error("Please Provide the id");
         }
-        const result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_USER_STATUS,[status,launched,labId,userId]);
+        let result;
+        if(purchased){
+            result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_USER_PURCHASED_STATUS,[status,launched,labId,userId]);
+        }
+        else{
+            result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_USER_STATUS,[status,launched,labId,userId]);
+        }
+        
         return result.rows[0]
     } catch (error) {
         console.log(error);
@@ -1107,9 +1220,9 @@ const updateUserCloudSliceLabTimes = async(startDate,endDate,labId,identifier,ty
 }
 
 //get all cloudslice labs
-const getAllCloudSliceLabs = async()=>{
+const getAllCloudSliceLabs = async(userId)=>{
     try {
-        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_CLOUDSLICE_LABS);
+        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_CLOUDSLICE_LABS, [userId]);
         if(!result.rows.length){
             throw new Error("No lab is found");
         }
@@ -1146,6 +1259,88 @@ const addLabStatusOfUser = async(data)=>{
     } catch (error) {
         console.log(error);
         throw new Error('Error in storing the lab status of user',error.message);
+    }
+}
+
+const getCloudSliceDetailsForCatalogue = async(labId)=>{
+    try {
+        const getLabDetails = await pool.query(cloudSliceAwsQueries.GET_LABS_ON_ID,[labId]);
+
+       if(!getLabDetails.rows.length){
+           throw new Error("No lab found with this id");
+       }
+       const labDetails = getLabDetails.rows[0];
+       if(labDetails.modules === 'with-modules'){
+           const getModules = await pool.query(cloudSliceAwsQueries.GET_MODULES_ON_LABID,[labId]);
+           if(!getModules.rows.length){
+               throw new Error("No modules found with this lab id");
+           }
+           const modules = [];
+           for(const module of getModules.rows){
+               const moduleId = module.id;
+               const getExercises = await pool.query(cloudSliceAwsQueries.GET_ALL_EXERCISES_ON_MODULEID,[moduleId]);
+               if(!getExercises.rows.length){
+                   throw new Error("No exercises found with this module id");
+               }
+               const exercises = [];
+               for(const exercise of getExercises.rows){
+                   const exerciseId = exercise.id;
+                   if(exercise.type === 'lab'){
+                       const getLabExercise = await pool.query(cloudSliceAwsQueries.GET_LAB_EXERCISES_ON_ID,[exerciseId]);
+                       if(!getLabExercise.rows.length){
+                           throw new Error("No lab exercise found with this exercise id");
+                       }
+                       exercises.push({
+                           ...exercise,
+                           details:getLabExercise.rows[0]
+                       })
+                   }
+                   else if(exercise.type === 'questions'){
+                       const getQuizExercise = await pool.query(cloudSliceAwsQueries.GET_QUESTIONS_BY_EXERCISE_ID,[exerciseId]);
+                       if(!getQuizExercise.rows.length){
+                           throw new Error("No quiz exercise found with this exercise id");
+                       }
+                       const questions = [];
+                       for(const question of getQuizExercise.rows){
+                           const questionId = question.id;
+                           const getOptions = await pool.query(cloudSliceAwsQueries.GET_OPTIONS_BY_QUESTION_ID,[questionId]);
+                           if(!getOptions.rows.length){
+                               throw new Error("No options found with this question id");
+                           }
+                           questions.push({
+                               ...question,
+                               options:getOptions.rows
+                           })
+                       }
+                       exercises.push({
+                           ...exercise,
+                           title:questions.title,
+                           details:questions
+                       })
+                   }
+               }
+               modules.push({
+                   ...module,
+                   exercises:exercises
+               })
+           }
+           return {
+               ...labDetails,
+               modules:modules,
+               type:'cloud-slice'
+           }
+       }
+       else if(labDetails.modules === 'without-modules'){
+           return {
+               ...labDetails,
+               modules:[],
+               type:'cloud-slice'
+           }
+       }
+       return labDetails
+    } catch (error) {
+       console.log(error);
+       throw error; 
     }
 }
 
@@ -1193,6 +1388,10 @@ module.exports = {
   updateCloudSliceLabRunningState,
   addLabStatusOfUser,
   getUserLabExerciseStatus,
-  updateCatalogueDetails
+  updateCatalogueDetails,
+  getUserPurchasedLabs,
+  updateDates,
+  getCloudSliceDetailsForCatalogue,
+  getUserPurchasedLabOnId
 }
 

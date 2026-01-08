@@ -15,6 +15,7 @@
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.3",
     "canvas": "^3.1.2",
+    "connect-redis": "^5.2.0",
     "cookie": "^1.0.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -22,9 +23,13 @@
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-session": "^1.18.2",
+    "guacamole-common-js": "^1.5.0",
+    "guacamole-lite": "^1.2.0",
     "handlebars": "^4.7.8",
     "http-proxy-middleware": "^3.0.3",
     "install": "^0.13.0",
+    "instamojo-nodejs": "^0.0.5",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
@@ -39,7 +44,9 @@
     "pg": "^8.13.1",
     "redis": "^3.1.2",
     "socket.io-redis": "^5.4.0",
+    "ssh2-sftp-client": "^12.0.1",
     "start": "^5.1.0",
-    "stripe": "^18.4.0"
+    "stripe": "^18.4.0",
+     "ws": "^8.13.0"
   }
 }

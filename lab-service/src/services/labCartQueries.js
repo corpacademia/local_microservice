@@ -13,7 +13,13 @@ module.exports = {
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9) RETURNING *`,
     INSERT_ASSIGNLAB_SINGLEVM_AWS:`INSERT INTO singlevm_aws_purchased_labs (labid, user_id, payment_id,  duration) VALUES ($1, $2, $3, $4) RETURNING *`,
     INSERT_ASSINGLAB_CLOUDSLICE_AWS:`INSERT INTO cloudslice_purchased_labs (labid,user_id,duration,payment_id) VALUES($1,$2,$3,$4) RETURNING *`,
+    INSERT_ASSINGLAB_SINGLEVM_PROXMOX_PURCHASED:`INSERT INTO singlevmproxmox_purchased_labs (labid,user_id,duration,payment_id,vmname) VALUES($1,$2,$3,$4,$5) RETURNING *`,
     INSERT_CART_DETAILS:`INSERT INTO carts (user_id, cart_data) VALUES ($1, $2) RETURNING id`,
+
+    INSERT_SINGLEVM_AWS_PURCHASED_LAB_ENROLLMENTS:`UPDATE  createlab set total_enrollments=total_enrollments + $1 where lab_id=$2`,
+    INSERT_CLOUDSLICE_AWS_PURCHASED_LAB_ENROLLMENTS:`UPDATE  cloudslicelab set total_enrollments=total_enrollments + $1 where labid=$2`,
+    INSERT_SINGLEVM_PROXMOX_PURCHASED_LAB_ENROLLMENTS:`UPDATE  singlevmproxmox_lab set total_enrollments=total_enrollments + $1 where labid=$2`,
+
 
     GET_CART_ITEMS_BY_USER_ID:`SELECT * FROM cart_items WHERE user_id = $1`,
     GET_CART_DATA:`SELECT cart_data FROM carts WHERE id = $1`,

@@ -202,14 +202,14 @@ const updateUserVM = async(req,res)=>{
 //update the catalogue details
  const updateCatalogueDetails = async(req,res)=>{
     try {
-        const {catalogueName,catalogueType,software,labId} = req.body;
-        if(!catalogueName || !catalogueType || !labId){
+        const {catalogueName,catalogueType,software,labId,level,category,price} = req.body;
+        if(!catalogueName || !catalogueType || !labId || !level || !category || !price){
             return res.status(400).send({
                 success:false,
                 message:"Please provide all the required fields"
             })
         }
-        const result = await clusterService.updateVMClusterDatacenterCatalogueDetails(catalogueName,catalogueType,software,labId);
+        const result = await clusterService.updateVMClusterDatacenterCatalogueDetails(catalogueName,catalogueType,software,labId,level,category,price);
         if(!result || !result.rows.length){
             return res.status(404).send({
                 success:false,
@@ -259,7 +259,9 @@ const updateUserVMWithProtocol = async(req,res)=>{
 
 const vmclusterDatacenterLabOrgAssignment = async (req,res)=>{
     try {
+        console.log(req.body)
         const data  = req.body;
+        
         const result =  await clusterService.vmclusterDatacenterLabOrgAssignment(data);
         if(!result){
             return res.status(400).send({
@@ -305,8 +307,8 @@ const getVMClusterDatacenterlabDetails = async(req,res)=>{
 //get all the organization labs
 const getAllTheOrganizationLabs = async(req,res)=>{
     try {
-        const {orgId} = req.body;
-        const orgLabs = await clusterService.getAllTheOrganizationLabs(orgId);
+        const {orgId,admin_id} = req.body;
+        const orgLabs = await clusterService.getAllTheOrganizationLabs(orgId,admin_id);
         if(!orgLabs || orgLabs?.rows?.length === 0){
             return res.status(404).send({
                 success:false,
@@ -359,6 +361,7 @@ const assignLabToUser = async(req,res)=>{
 const updateUserLabTimingsOfVMClusterDatacenter = async (req,res)=>{
         try {
             const {labId,identifier,startTime,endTime,type} = req.body;
+            console.log(req.body);
             if(!labId||!identifier||!startTime||!endTime ||!type){
                 return res.status(404).send({
                     success:false,

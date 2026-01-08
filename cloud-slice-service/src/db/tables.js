@@ -93,6 +93,55 @@ const createTables = async () => {
                status TEXT default 'not-started'
                );`)
 
+               //table for purchased labs
+             await pool.query(`
+              create table if not exists cloudslice_purchased_labs(
+                        id uuid primary key default uuid_generate_v4(),
+                        labid uuid,
+                        user_id uuid,
+                        assigned_at timestamp default NOW(),
+                        status text default 'not-started',
+                        start_date timestamp,
+                        end_date timestamp,
+                        launched boolean default false,
+                        isrunning boolean default false,
+                        username text,
+                        password text,
+                        console_url text,
+                        duration text,
+                        payment_id uuid references payments(id)
+                    )
+                `)
+        //Reviews Table
+        await pool.query(
+            `
+            CREATE TABLE IF NOT EXISTS reviews (
+            id uuid PRIMARY KEY default uuid_generate_v4(),
+            lab_id uuid,
+            user_id uuid,
+            rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5), -- star rating
+            review_text TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+            `
+        )
+        //create a table for cloudvm aws purchased labs
+        await pool.query(`
+                create table if not exists cloudvm_aws_purchased_labs(
+                id uuid primary key default uuid_generate_v4(),
+                lab_id uuid,
+                user_id uuid,
+                status text default 'not-started',
+                start_date timestamp,
+                completion_date timestamp,
+                duration integer,
+                launched boolean default false,
+                purchased boolean default false,
+                assigned_at timestamp default timestamp,
+                payment_id uuid
+                )  
+            `)
+
         //create a table for cloudslicelab with modules
         // await pool.query(`
         //     CREATE TABLE IF NOT EXISTS cloudSliceLabWithModules (

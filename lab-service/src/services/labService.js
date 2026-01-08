@@ -10,6 +10,8 @@ const { getUserEmail, markEmailAsSent, isWithinQuietHours, nowInTz, emailPlaceho
 const { sendNotificationToMail } = require('./notificationServices');
 const { sendNotification } = require('../socket');
 
+
+
 const getUserData = async(userId,sessionToken)=>{
   try {
     if(!userId){
@@ -83,11 +85,15 @@ const createLab=async(data,user)=>{
     try{
        const {type,details,platform,provider,config,instance,userGuides,
       labGuides} = data;
+      const keyTechnologies = details.technologies.split(',').map(s=>s.trim()).filter(Boolean);
        const output = await pool.query(queries.CREATE_LAB,[user.id,type,platform,provider,
         config.os,config.os_version,config.cpu,
         config.ram,config.storage,instance,details.title,
         details.description,details.duration,config.snapshotType,
-        labGuides,userGuides,details.guacamole.name,details.guacamole.url]);
+        labGuides,userGuides,details.guacamoleName,details.guacamoleUrl,details.learningObjectives,
+        details.prerequisites,details.targetAudience,keyTechnologies,details.additionalDetails
+    
+]);
        
        return output.rows[0];
     }
@@ -99,10 +105,16 @@ const createLab=async(data,user)=>{
 
 //create lab for single vm datacenter
 const createSingleVmDatacenterLab = async (data, user) => {
+
     try {
         const { details, type, platform, labGuides, userGuides  } = data;
-        const { title, description,guacamole } = details;
+        const { title, description,guacamoleName,guacamoleUrl,learningObjectives,prerequisites,targetAudience,technologies,additionalDetails } = details;
+
         const { startDate, startTime, endDate, endTime,protocol,users } = data.datacenterConfig;
+        const keyTechnologies = technologies
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
         const output = await pool.query(queries.INSERT_DATACENTER_LAB, [
             user,
             title,
@@ -114,8 +126,9 @@ const createSingleVmDatacenterLab = async (data, user) => {
             labGuides,
             userGuides,
             protocol,
-            guacamole.name,
-            guacamole.url
+            guacamoleName,
+            guacamoleUrl,
+            learningObjectives,prerequisites,targetAudience,keyTechnologies,additionalDetails
         ]);
         if (!output.rows[0]) {
             throw new Error("Could not create the lab");    
@@ -159,9 +172,18 @@ const updateSingleVmDatacenterLab = async (labId, software, catalogueType,catalo
     }
 }
 //get all lab catalogues
-const getAllLabCatalogues = async () => {
+const getAllLabCatalogues = async (user) => {
     try {
-        const result = await pool.query(queries.GET_ALL_CATALOGUES);
+        // if(!user){
+        //     throw new Error('Please provide user details');
+        // }
+        let result;
+        if(user?.role === 'user' && user?.org_id){
+            result = await pool.query(queries.GET_ALL_CATALOGUES_BY_ORG,[user?.org_id]);
+        }
+        else{
+        result = await pool.query(queries.GET_ALL_CATALOGUES);
+        }
         if (!result.rows.length) {
             throw new Error("No catalogues found");
         }
@@ -171,6 +193,33 @@ const getAllLabCatalogues = async () => {
         throw error;
     }
 };
+const getAllOrganizationAssignedLabs = async(orgId) =>{
+    try {
+    const result = await pool.query(queries.GET_ALL_ORG_ASSIGNED_LABS,[orgId]);
+     if(!result.rows){
+            return [];
+        }
+        return result.rows;
+    } catch (error) {
+        console.log("Error in getting the labs",error);
+        throw error;
+    }
+}
+
+
+//get all user purchased labs
+const getAllUserPurchasedLabs = async(userId)=>{
+    try {
+        const result = await pool.query(queries.GET_ALL_USER_PURCHASED_LABS,[userId]);
+        if(!result.rows){
+            return [];
+        }
+        return result.rows;
+    } catch (error) {
+        console.log("Error in getting the labs",error);
+        throw error;
+    }
+}
 
 //get user purchased labs
 const getUserPurchasedSinglvmLabs = async(userId)=>{
@@ -185,6 +234,21 @@ const getUserPurchasedSinglvmLabs = async(userId)=>{
         throw error;
     }
 }
+
+//get user purchased labs on labid
+const getUserPurchasedSinglvmLabsOnLabId = async(labId)=>{
+    try {
+        const result = await pool.query(queries.GET_USER_PURCHASED_SINGLEVM_AWS_LABID,[labId]);
+        if(!result.rows.length){
+            return [];
+        }
+        return result.rows;
+    } catch (error) {
+        console.log('Error in getting the single vm purchased labs');
+        throw error;
+    }
+}
+
 
 //delete catalogue
 const deleteCatalogue = async (catalogueId) => {
@@ -255,7 +319,7 @@ const  updateSingleVMDatacenterUserCredRunningState = async (isrunning, User, la
     try {
         console.log("Updating user credential running state:", { isrunning, User, labId });
         if(isrunning){
-            const update = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_USER_STATUS,['started', User, labId]);
+            const update = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_USER_STATUSS,['started', User, labId]);
             if(!update.rows.length){
                 throw new Error("No lab instance found for this user");
             }
@@ -409,7 +473,7 @@ const editSingleVmDatacenterCreds = async ( username, password, ip, port, protoc
 //get the orgassignedsinglevmdatacenter lab
 const getOrgAssignedsingleVMDatacenterLab = async(orgid,created_by)=>{
     try {
-        const result = await pool.query(labQueries.GET_SINGLEVM_DATACENTER_ORG,[orgid,created_by]);
+        const result = await pool.query(labQueries.GET_SINGLEVM_DATACENTER_ORG,[orgid]);
         if(!result.rows.length){
             return [];
             // throw new Error("Could not fetch org assigned labs");
@@ -550,6 +614,17 @@ const getAllLab = async()=>{
     }
 }
 
+//get all labs 
+const getAllLabs = async()=>{
+    try {
+        const labs = await pool.query(labQueries.GET_ALL_LABS);
+        return labs.rows;
+    } catch (error) {
+        console.log("Error in getAllLab service:",error.message);
+        throw error
+    }
+}
+
 //get datacenter labs on admin id
 const getDatacenterLabsOnAdminId = async (adminId) => {
     try {
@@ -595,17 +670,6 @@ const assignLab = async (lab, userIds, assign_admin_id,startDate,endDate,session
     try {
         // Normalize `userIds` to an array
         userIds = Array.isArray(userIds) ? userIds : [userIds];
-        // Get configuration details
-        // const getDays = await pool.query(labQueries.GET_CONFIG_DETAILS_RANDOM_USER, [lab]);
-        // if (!getDays.rows.length) {
-        //     throw new Error("Invalid lab ID");
-        // }
-
-        // let date = new Date();
-        // date.setDate(date.getDate() + getDays.rows[0].config_details.numberOfDays);
-        // let completion_date = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-
-        // Arrays to track successful assignments and errors
         const successfulAssignments = [];
         const errors = [];
 
@@ -691,7 +755,7 @@ const assignLab = async (lab, userIds, assign_admin_id,startDate,endDate,session
 const getAssignLabOnId = async (userId) => {
     try {
         const result = await pool.query(queries.GET_ASSIGNED_LABS, [userId]);
-      
+        
         if (!result.rows) {
             const result = await pool.query(queries.GET_ASSIGNED_PURCHASED_LABS,[userId]);
             if(!result.rows) return [];
@@ -824,10 +888,12 @@ const getAwsInstanceDetailsOfUsers = async (lab_id, user_id) => {
     return result.rows[0]; // Return instance details
 };
 
-const updateAwsInstanceDetailsOfUsers = async (lab_id, user_id, state, isStarted) => {
+const updateAwsInstanceDetailsOfUsers = async (lab_id, user_id, state, isStarted,type) => {
     if(!isStarted){
         const result = await pool.query(queries.UPDATE_USER_INSTANCE_STATES, [true,state, lab_id, user_id]);
-         const update = await pool.query(queries.UPDATE_USER_SINGLEvM_AWS_STATUS,['started', lab_id, user_id]);
+        if(!type === 'org'){
+        const update = await pool.query(queries.UPDATE_USER_SINGLEvM_AWS_STATUS,['started', lab_id, user_id]);
+        
         if(!update.rows.length){
             const update = await pool.query(queries.UPDATE_USER_SINGLEvM_AWS_PURCHASED_STATUS,['started', lab_id, user_id])
             if(!update.rows.length){
@@ -836,6 +902,8 @@ const updateAwsInstanceDetailsOfUsers = async (lab_id, user_id, state, isStarted
         }
         return result.rows[0];
     }
+    return result.rows[0];
+}
     else{
        
         const result = await pool.query(queries.UPDATE_USER_INSTANCE_STATE, [state, lab_id, user_id]);
@@ -868,8 +936,8 @@ const assignLabBatch = async (lab_id, admin_id, org_id, configured_by, enddate) 
     return { assigned: false, data: batch.rows[0] };
 };
 
-const getLabBatchAssessment = async (admin_id) => {
-    const data = await pool.query(queries.GET_LAB_BATCH_BY_ADMIN, [admin_id]);
+const getLabBatchAssessment = async (orgId) => {
+    const data = await pool.query(queries.GET_LAB_BATCH_BY_ADMIN, [orgId]);
     if(!data.rows.length){
         return [];
     }
@@ -1060,9 +1128,9 @@ const getCount = async (userId, user) => {
   try {
     let result;
 
-    if (user.role === 'superadmin' || user.role === 'orgsuperadmin') {
+    if (user.role === 'superadmin' || user.role === 'orgsuperadmin' || user.role === 'labadmin') {
       result = await pool.query(queries.GET_COUNT, [userId]);
-    } else if (user.role === 'orgadmin') {
+    } else if (user.role === 'labadmin') {
       result = await pool.query(queries.GET_ORG_LAB_COUNT, [userId,user.org_id]);
     } else {
       throw new Error("Invalid user role");
@@ -1097,7 +1165,8 @@ const getCloudSliceOrgLabs = async (orgId) => {
       throw new Error("Error in getting the Labs");
     }
   };
-  
+ 
+
 
 module.exports = {
     createLab,
@@ -1156,5 +1225,9 @@ module.exports = {
     deleteCatalogue,
     updateCatalogueDetails,
     getUserPurchasedSinglvmLabs,
-    updateSingleVMAwsLab
+    updateSingleVMAwsLab,
+    getUserPurchasedSinglvmLabsOnLabId,
+    getAllUserPurchasedLabs,
+    getAllOrganizationAssignedLabs,
+    getAllLabs
 }

@@ -12,7 +12,8 @@ const {
     getOrganizationStats,
     editOrganizationModal,
     deleteOrganization,
-    updateOrganizationAdmin
+    updateOrganizationAdmin,
+    approveOrRejectOrg
 } = require('../controllers/organizationController');
 
 
@@ -52,7 +53,8 @@ router.post('/createOrganization',upload.single('logo'),createOrganization)
 router.get('/getOrgUsersCount/:orgId', getOrganizationStats);
 router.post('/updateOrganization/:orgId',upload.single('logo'),editOrganizationModal);
 router.post('/deleteOrganizations',deleteOrganization);
-router.post('/updateOrgAdmin',updateOrganizationAdmin)
+router.post('/updateOrgAdmin',updateOrganizationAdmin);
+router.post('/approve',approveOrRejectOrg)
 
 
 module.exports  = router;

@@ -6,6 +6,59 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config(); 
+const crypto = require("crypto");
+const {
+    nowInTz,
+    isWithinQuietHours,
+    markEmailAsSent,
+    fetchAllUsersSettings,
+    fetchPendingNotificationsForUser,
+    getUserEmail,
+    emailPlacehoders
+} = require('../services/emailNotificationService');
+const handlebars = require('handlebars');
+const { sendNotification } = require('../socket');
+
+const sendNotificationToMail = async (template, placeholders) => {
+ 
+  // Load HTML template
+  const htmlTemplate = fs.readFileSync(template, 'utf8');
+
+  // Compile with Handlebars
+  const compiledTemplate = handlebars.compile(htmlTemplate);
+
+  // Render with placeholders
+  const populatedTemplate = compiledTemplate(placeholders);
+
+  // Configure mail transporter
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: placeholders.email,
+    subject: placeholders.subject || placeholders.title,
+    html: populatedTemplate
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
+const generateSecurePassword = async(length = 8)=> {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{};:,.<>?";
+  const bytes = crypto.randomBytes(length);
+  let password = "";
+
+  for (let i = 0; i < length; i++) {
+    password += chars[bytes[i] % chars.length];
+  }
+
+  return password;
+}
 
 const signupService = async (name, email, password,organization,isNewOrganization) => {
     try {
@@ -34,12 +87,57 @@ const signupService = async (name, email, password,organization,isNewOrganizatio
     // New organization — insert the admin user
     result = await pool.query(
       userQueries.insertAdminUserQuery,
-      [name, email, hashedPassword, organization.organization_name, organization.org_type, 'orgadmin', organization.id]
+      [name, email, hashedPassword, organization.organization_name, organization.org_type, 'orgsuperadmin', organization.id]
     );
   }
-
-              
-
+  
+  //send mail to organiztion admin
+   const userSettings = await pool.query(userQueries.GET_USER_NOTIFICATION_SETTINGS, [organization.org_admin]);
+        if (userSettings.rowCount > 0) {
+           const settings = userSettings.rows[0];
+           const adminMail = await getUserEmail(organization.org_admin);
+           const insertNotification = await pool.query(userQueries.INSERT_NOTIFICATION, ['user_registered', 'User Registration', `A new user:${name} has registered, Approval/Rejection is Pending `,'medium', organization.org_admin,[JSON.stringify({
+                           email:email,
+                           name:name,
+                           userId:result.rows[0].id
+                           })] ]);
+                           //Email Notification
+        if(settings.emailnotifications.includes('user_registered')){
+          const htmlTemplate = path.join('C:\\Users\\Admin\\Desktop\\golab_project\\Client\\public\\templates\\notification-email-template.html')
+       await sendNotificationToMail(htmlTemplate,{
+              title: 'User Registered Notification',
+              priority: 'medium',
+              // icon: 'https://example.com/icon.png',
+              message: `${name} User registered successfully,approve the user`,
+              metadata: {
+               name:name,
+               email:email,
+               organization:organization.organization_name,
+              },
+              actionUrl: 'https://app.golabing.ai/login',
+              actionText: 'Approve/Reject Now',
+              formattedDate: new Date().toLocaleString(),
+              notificationType: 'user_registered',
+              unsubscribeUrl: 'https://example.com/unsubscribe',
+              preferencesUrl: 'https://example.com/preferences',
+              email:adminMail,
+       })}
+               // ---- IN-APP NOTIFICATIONS ----
+       if (settings.inappnotifications.includes("user_registered")) {
+                                       await sendNotification({
+                                         userId: organization.org_admin,
+                                         notification: insertNotification.rows[0],
+                                       });
+                             
+                                      //  await pool.query(labQueries.INSERT_LAB_NOTIFICATION, [
+                                      //    lab,
+                                      //    "lab_assigned",
+                                      //    endDate,
+                                      //    insertNotification.rows[0]?.id,
+                                      //  ]);
+          }}
+        
+  
         // 3. Prepare email HTML
  const templatePath = path.join(
   'C:/Users/Admin/Desktop/golab_project/Client/public/templates/email-template.html'
@@ -81,7 +179,6 @@ try {
   console.error('Failed to send email:', err);
   // Optionally log error or notify admin
 }
-
         return result.rows[0];
     } catch (error) {
         throw error;
@@ -89,9 +186,10 @@ try {
 };
 
 //send the email verification link
-const sendVerificationEmail = async (email) =>{
+const sendVerificationEmail = async (email,type) =>{
   try {
-       const existingUser = await pool.query(userQueries.getUserByEmailQuery, [email]);
+    if(type !== 'reset'){
+          const existingUser = await pool.query(userQueries.getUserByEmailQuery, [email]);
     if (existingUser.rows.length > 0) {
     throw new Error('User with this email already exists ');
    }
@@ -99,6 +197,8 @@ const sendVerificationEmail = async (email) =>{
     if (existingOrgUser.rows.length > 0) {
     throw new Error('User with this email already exists in the organization');
     }
+    }
+   
    // Generate 6-digit random code
    const generateCode =  Math.floor(100000 + Math.random() * 900000).toString(); 
 
@@ -163,6 +263,42 @@ const verifyEmailCode = async (email, code) => {
     throw error;
   }
 };
+//reset password
+const resetPassword = async(email,newPassword)=>{
+  try {
+    let updatePassword;
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    updatePassword = await pool.query(userQueries.updateUserPassword,[hashedPassword,email]);
+    if(!updatePassword.rows.length){
+      updatePassword = await pool.query(userQueries.updateOrgUserPassword,[hashedPassword,email]);
+      if(!updatePassword.rows.length)
+        throw new Error("Failed to update the password")
+  } 
+     if(settings.emailnotifications.includes('password_reset')){
+          const htmlTemplate = path.join('C:\\Users\\Admin\\Desktop\\golab_project\\Client\\public\\templates\\notification-email-template.html')
+       await sendNotificationToMail(htmlTemplate,{
+              title: 'Password Reset Notification',
+              priority: 'medium',
+              // icon: 'https://example.com/icon.png',
+              message: `${name} User registered successfully,approve the user`,
+              metadata: {
+               name:name,
+               email:email,
+               organization:organization.organization_name,
+              },
+              actionUrl: 'https://app.golabing.ai/login',
+              actionText: 'Login Now',
+              formattedDate: new Date().toLocaleString(),
+              notificationType: 'password_reset',
+              unsubscribeUrl: 'https://example.com/unsubscribe',
+              preferencesUrl: 'https://example.com/preferences',
+              email:email,
+       })}
+   return updatePassword;
+    }catch (error) {
+        throw error;
+      }
+    }
 
 const loginService = async (email, password) => {
     try {
@@ -177,6 +313,9 @@ const loginService = async (email, password) => {
         }
 
         const user = userResult.rows[0];
+        if(user.status === 'pending' || user.status === 'rejected'){
+          throw new Error('Either you are not approved or rejected');
+        }
         // Compare password
         const isPasswordValid = await comparePassword(password, user.password);
         if (!isPasswordValid) {
@@ -218,6 +357,15 @@ const loginService = async (email, password) => {
     }
 
   };
+//user approve status
+const userApprove = async(userId,admin,status)=>{
+  try {
+    const updateApproveStatus = await pool.query(userQueries.updateUserApproval,[status,admin.id,userId]);
+    return updateApproveStatus;
+  } catch (error) {
+    throw error;
+  }
+}
 
 const logoutService = async (email) => {
     try {
@@ -316,6 +464,118 @@ try {
    }
    
 };
+//bulk add user
+
+ const bulkAddUser = async (users, orgId, id, orgName, orgType, role) => {
+  try {
+    const results = [];
+
+    for (const user of users) {
+      const { name, email } = user;
+
+      if (!name || !email) {
+        console.warn(`Skipping invalid user: ${JSON.stringify(user)}`);
+        continue;
+      }
+
+      const existingUser = await pool.query(userQueries.getUserByEmailQuery, [email]);
+      if (existingUser.rows.length > 0) {
+        console.warn(`User with email ${email} already exists`);
+        continue;
+      }
+
+      const existingOrgUser = await pool.query(userQueries.getOrgUserByEmailQuery, [email]);
+      if (existingOrgUser.rows.length > 0) {
+        console.warn(`User with email ${email} already exists in org`);
+        continue;
+      }
+
+      // Generate password
+      const plainPassword = await generateSecurePassword();
+
+      //  Hash the password before storing
+      const hashedPassword = await hashPassword(plainPassword);
+       
+      let result;
+      await pool.query("BEGIN");
+      //  Insert into DB
+      if(role === 'user'){
+         result = await pool.query(userQueries.addToOrg, [
+        name,
+        email,
+        hashedPassword,
+        role,
+        orgName,
+        orgType,
+        orgId,
+        id,
+      ]);
+      }
+      else{
+         result = await pool.query(userQueries.addUser, [
+        name,
+        email,
+        hashedPassword,
+        role,
+        orgName,
+        orgType,
+        orgId,
+        id,
+      ]);
+      }
+      
+
+      // Prepare email template
+       const templatePath = path.join(
+        'C:/Users/Admin/Desktop/golab_project/Client/public/templates/email-template.html'
+      );
+      let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+
+      const placeholders = {
+        name,
+        email,
+        password: plainPassword, // send raw password to user
+        loginUrl: "https://d3q8q5ntrgsj3v.cloudfront.net/",
+      };
+
+      for (const key in placeholders) {
+        const regex = new RegExp(`{{${key}}}`, "g");
+        htmlTemplate = htmlTemplate.replace(regex, placeholders[key]);
+      }
+
+      // Send email
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "Your GoLabing.ai Account Credentials",
+        html: htmlTemplate,
+      };
+
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log( `Email sent to: ${email}`);
+      } catch (err) {
+        console.error(`Failed to send email to ${email}:`, err.message);
+      }
+
+      results.push(result.rows[0]);
+    }
+    await pool.query('COMMIT');
+    return results;
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error("Error in bulkAddUser:", error);
+    throw new Error("Could not add users");
+  }
+};
 
 const getUserData = async (userId) => {
     let user = await pool.query(userQueries.getUserById, [userId]);
@@ -389,7 +649,6 @@ const updateUserRole = async (userId, role) => {
   throw new Error("User not found in either users or organization_users table");
 };
 
-  
   const getTokenAndGetUserDetails = async (token) => {
     if (!token) throw new Error("No token provided");
     const decoded = verifyToken(token);
@@ -516,6 +775,7 @@ const updateUserRole = async (userId, role) => {
 const addOrganizationUser = async (userData) => {
   try {
     const { name, email, password, role, admin_id, organization, org_id, organization_type } = userData;
+    
   const existingUser = await pool.query(userQueries.getUserByEmailQuery, [email]);
   if (existingUser.rows.length > 0) {
     throw new Error('User with this email already exists ');
@@ -526,9 +786,12 @@ const addOrganizationUser = async (userData) => {
   }
   // 1. Hash the password
   const hashedPassword = await bcrypt.hash(password, 10);
-
+  
+  await pool.query('BEGIN');
   // 2. Insert into database
-  const result = await pool.query(userQueries.ADD_ORG_USER, [
+  let result;
+  if (role === 'user' ){
+    result = await pool.query(userQueries.ADD_ORG_USER, [
     name,
     email,
     hashedPassword,
@@ -538,6 +801,24 @@ const addOrganizationUser = async (userData) => {
     org_id,
     organization_type
   ]);
+  }
+  else{
+    result = await pool.query(userQueries.addUser, [
+    name,
+    email,
+    hashedPassword,
+    role,
+    organization,
+    organization_type,
+    org_id,
+    admin_id,
+  ]);
+  if(role === 'orgsuperadmin'){
+    const userId = result.rows[0].id;
+    await pool.query(userQueries.UPDATE_ORGANIZATION_ADMIN,[userId,org_id])
+  }
+  }
+   
   const newUser = result.rows[0];
 
   // 3. Prepare email HTML
@@ -582,20 +863,19 @@ const addOrganizationUser = async (userData) => {
     console.error('Failed to send email:', err);
     // Optionally log error or notify admin
   }
-
+  await pool.query('COMMIT');
   return newUser;
 
   } catch (error) {
+    await pool.query('ROLLBACK');
     console.log(error);
     throw new Error(error.message || "Could not add organization user");
   }
 }
-  
 
-  
   // Get Organization Users
-  const getOrganizationUsers = async (admin_id) => {
-    const result = await pool.query(userQueries.GET_ORG_USERS, [admin_id]);
+  const getOrganizationUsers = async (org_id) => {
+    const result = await pool.query(userQueries.GET_ORG_USERS, [org_id]);
     return result.rows;
   };
   
@@ -649,19 +929,27 @@ const addOrganizationUser = async (userData) => {
   };
 
   //update user profile
-  const updateUserProfile = async ( id, name, email, password, phone, location, profilephoto) => {
+  const updateUserProfile = async ( id, name, email, password, phone, location, profilephoto,currentPassword) => {
   try {
+    console.log("Updating user profile with:", { id, name, email, password, phone, location, profilephoto,currentPassword });
     if (!id || !name || !email) {
       throw new Error("Please provide the required fields");
     }
-
+    if (phone === undefined || phone === '' ) {
+      phone = null;
+    }
+    if (location === undefined || location === '') {
+      location = null;
+    }
     const userResult = await pool.query(userQueries.GET_USER_BY_ID, [id]);
     if (userResult.rows.length > 0) {
       const existingUser = userResult.rows[0];
 
       // Use existing profile photo if none provided
       const finalProfilePhoto = profilephoto ?? existingUser.profilephoto;
-
+      if(currentPassword && !(await bcrypt.compare(currentPassword, existingUser.password))){
+        throw new Error("Current password is incorrect");
+      }
       if (password && (await bcrypt.compare(password, existingUser.password))) {
         throw new Error("New password cannot be same as the old password");
       }
@@ -671,7 +959,7 @@ const addOrganizationUser = async (userData) => {
         : userQueries.updateUserProfileWithNoPassword;
       const values = password
         ? [name, email, await bcrypt.hash(password, 10), phone, location, finalProfilePhoto, id]
-        : [name, email, phone, location, finalProfilePhoto, id];
+        : [name, email, phone , location, finalProfilePhoto, id];
 
       const result = await pool.query(query, values);
       return result.rows[0];
@@ -726,5 +1014,8 @@ module.exports = {
   deleteRandomUsers,
   updateUserProfile,
   sendVerificationEmail,
-  verifyEmailCode
+  verifyEmailCode,
+  bulkAddUser,
+  userApprove,
+  resetPassword
  };

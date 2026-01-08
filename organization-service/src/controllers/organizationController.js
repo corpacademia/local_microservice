@@ -1,3 +1,4 @@
+const { UPDATE_ADMIN_STATUS } = require('../services/organizationQueries');
 const organizationServices = require('../services/organizationService');
 
 
@@ -161,6 +162,7 @@ const editOrganizationModal = async (req, res) => {
         const orgId = req.params.orgId;
         const data = req.body;
         const logo = req.file ? req.file.path : null;
+        console.log(data)
         const updatedOrganization = await organizationServices.updateOrganizationService(orgId, data, logo);
 
         if (!updatedOrganization) {
@@ -211,6 +213,39 @@ const updateOrganizationAdmin = async(req,res)=>{
        }) 
     }
 }
+//approve or reject the organization
+const approveOrRejectOrg = async(req,res)=>{
+    try {
+        const {orgId,action} = req.body;
+
+        if(!orgId || !action){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide all required fields"
+            })
+        }
+        const update = await organizationServices.approveOrRejectOrg(orgId,action);
+        if(!update){
+            return res.status(404).send({
+                success:false,
+                message:`Cound not ${action === 'approve' ? 'approve' : 'reject'} `
+            })
+        }
+        
+        return res.status(200).send({
+            success:true,
+            message:"Succesfully updated",
+            data:update
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
 
 const deleteOrganization = async (req, res) => {
     try {
@@ -258,6 +293,7 @@ module.exports = {
     getOrganizationStats,
     editOrganizationModal,
     deleteOrganization,
-    updateOrganizationAdmin
+    updateOrganizationAdmin,
+    approveOrRejectOrg
 
 }

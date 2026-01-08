@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const cookie = require('cookie');
 const axios = require('axios');
 const cartQueries = require('../services/labCartQueries');
+const proxmoxQueries = require('../services/promoxQueries')
 const pool = require('../db/dbConfig');
 const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs');
@@ -13,12 +14,15 @@ const { jsPDF } = require("jspdf"); // if using pdfkit instead, I can rewrite
 const {autoTable} = require("jspdf-autotable");
 const { send } = require('process');
 const { sendNotification } = require('../socket');
+const Instamojo = require('../utility/instamojo')
+require('dotenv').config;
+
+const api = require('../config/proxmoxApi');
 
 // // normalize in case it's wrapped in .default
 // if (autoTable.default) {
 //   autoTable = autoTable.default;
 // }
-
 
 //get the user name
 const getUserData = async(userId,sessionToken)=>{
@@ -226,7 +230,7 @@ const  generateLabImage = async (
   const buffer = canvas.toBuffer('image/png');
   fs.writeFileSync(outputPath, buffer);
 
-  return `https://04a060b3815a.ngrok-free.app/generated/${fileName}`;
+  return `https://1b2029cb858f.ngrok-free.app/generated/${fileName}`;
 }
 
 
@@ -305,11 +309,50 @@ const stripeCheckout = async (req, res) => {
   }
 };
 //insert payment details and assign the lab to user
+
+//insta mojo checkout page
+const instaMojoCheckout = async(req,res)=>{
+  try {
+    const { amount, purpose, buyer_name, email, phone } = req.body;
+    const response = await axios.post(
+      `${process.env.INSTAMOJO_BASE_URL}/payment-requests/`,
+      {
+        purpose,
+        amount,
+        buyer_name,
+        email,
+        phone,
+        redirect_url: "http://localhost:5173/my-labs", // frontend URL
+        send_email: true,
+        send_sms: true,
+        allow_repeated_payments: false,
+      },
+      {
+        headers: {
+          "X-Api-Key": process.env.INSTAMOJO_API_KEY,
+          "X-Auth-Token": process.env.INSTAMOJO_AUTH_TOKEN,
+        },
+      }
+    );
+    const paymentUrl = response.data.payment_request.longurl;
+    return res.status(200).send({
+      success:true,
+      payment_url: paymentUrl
+    })
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send({
+      success:false,
+      message:"Internal server error",
+      error:error.message
+    })
+  }
+}
+
 const insertPaymentAndAssignLab = async (req, res) => {
   
   const sig = req.headers['stripe-signature'];
   let event;
-
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
@@ -334,7 +377,7 @@ const insertPaymentAndAssignLab = async (req, res) => {
 
       for (const item of cartItems) {
         const {  lab_id, duration,type,user_id ,name,price} = item;
-         const deleteCart = await pool.query(cartQueries.DELETE_CARTS,[lab_id,userId]);
+        const deleteCart = await pool.query(cartQueries.DELETE_CARTS,[lab_id,userId]);
         const insertPayment = await pool.query(cartQueries.INSERT_PAYMENT, [
           userId,
           session.id,
@@ -346,9 +389,9 @@ const insertPaymentAndAssignLab = async (req, res) => {
           lab_id,
           duration
         ]);
-        const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
-              if (userSettings.rowCount === 0) continue;
         
+        const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
+              if (userSettings.rowCount > 0) {
               const settings = userSettings.rows[0];
               if (!settings.inappnotifications.includes('payment_received')) continue;
         const insertNotification = await pool.query(labQueries.INSERT_NOTIFICATION,['payment_received','Payment Recieved',`Payment recieved ${session.currency}:${price} from ${session.customer_details.email}`,'medium',user_id,null]);
@@ -360,16 +403,19 @@ const insertPaymentAndAssignLab = async (req, res) => {
             notification: insertNotification.rows[0]
           });
         }
-
+      }
         const paymentId = insertPayment.rows[0].id;
         let insertLab;
         if(type === 'cloudslice'){
+          console.log('its working')
           insertLab = await pool.query(cartQueries.INSERT_ASSINGLAB_CLOUDSLICE_AWS, [
           lab_id,
           userId,
           duration,
           paymentId,
         ]);
+        
+        const addEnrolled = await pool.query(cartQueries.INSERT_CLOUDSLICE_AWS_PURCHASED_LAB_ENROLLMENTS,[1,lab_id])
         const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
               if (userSettings.rowCount === 0) continue;
         
@@ -394,6 +440,7 @@ const insertPaymentAndAssignLab = async (req, res) => {
           duration,
           
         ]);
+        const addEnrolled = await pool.query(cartQueries.INSERT_SINGLEVM_AWS_PURCHASED_LAB_ENROLLMENTS,[1,lab_id])
           const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
               if (userSettings.rowCount === 0) continue;
         
@@ -407,6 +454,32 @@ const insertPaymentAndAssignLab = async (req, res) => {
             notification:insertNotification.rows[0]
            })
         
+        }
+        }
+        else if (type === 'singlevm-proxmox'){
+          const vmName = user.name.replace(' ','-');
+            insertLab = await pool.query(cartQueries.INSERT_ASSINGLAB_SINGLEVM_PROXMOX_PURCHASED, [
+          lab_id,
+          userId,
+          duration,
+          paymentId,
+          vmName
+        ]);
+        
+        const addEnrolled = await pool.query(cartQueries.INSERT_SINGLEVM_PROXMOX_PURCHASED_LAB_ENROLLMENTS,[1,lab_id])
+        const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
+              if (userSettings.rowCount === 0) continue;
+        
+              const settings = userSettings.rows[0];
+              if (!settings.inappnotifications.includes('lab_assigned')) continue;
+         const insertNotification = await pool.query(labQueries.INSERT_NOTIFICATION,['lab_assigned','Lab Assigned',`${name} lab Assigned to ${user.name} `,'medium',user_id,null]);
+        if(insertNotification.rows.length > 0){
+          const labNotification =  await pool.query(labQueries.INSERT_LAB_NOTIFICATION,[lab_id,'lab_assigned',null,insertNotification.rows[0].id]);
+         
+          sendNotification({
+            userId: user_id,
+            notification:insertNotification.rows[0]
+          })
         }
         }
       }
@@ -807,6 +880,164 @@ const userTransactions = async (req, res) => {
   }
 };
 
+//insert free lab
+const insertFreeLab = async (req, res) => {
+  try {
+    const { labId, userId, duration, labType,userName } = req.body;
+
+    if (!labId || !userId || !duration || !labType ||!userName) {
+      return res.status(400).send({
+        success: false,
+        message: "Please provide all required fields",
+      });
+    }
+
+    if (labType === "cloudslice") {
+      // Insert lab assignment
+      const insertLab = await pool.query(
+        cartQueries.INSERT_ASSINGLAB_CLOUDSLICE_AWS,
+        [labId, userId, duration, null]
+      );
+
+      // 
+      await pool.query(
+        cartQueries.INSERT_CLOUDSLICE_AWS_PURCHASED_LAB_ENROLLMENTS,
+        [1, labId]
+      );
+
+      // Fetch user notification settings
+      const userSettings = await pool.query(
+        labQueries.GET_USER_NOTIFICATION_SETTINGS,
+        [userId]
+      );
+
+      if (userSettings.rowCount > 0) {
+        const settings = userSettings.rows[0];
+        if (
+          settings.inappnotifications &&
+          settings.inappnotifications.includes("lab_assigned")
+        ) {
+          // Get lab and user details for notification text
+          const labResult = await pool.query(labQueries.GET_CLOUDSLICE_LABS_LABID, [labId]);
+          const user = await getUserData(userId,sessionToken);
+          const labName = labResult.rows?.[0]?.name || "Lab";
+          const userName = user?.name || "User";
+
+          // Insert notification (make sure your SQL uses RETURNING *)
+          const insertNotification = await pool.query(
+            labQueries.INSERT_NOTIFICATION,
+            [
+              "lab_assigned",
+              "Lab Assigned",
+              `${labName} lab assigned to ${userName}`,
+              "medium",
+              userId,
+              null,
+            ]
+          );
+
+          if (insertNotification.rowCount > 0) {
+            const notificationId = insertNotification.rows[0].id;
+
+            await pool.query(labQueries.INSERT_LAB_NOTIFICATION, [
+              labId,
+              "lab_assigned",
+              null,
+              notificationId,
+            ]);
+
+            sendNotification({
+              userId: userId,
+              notification: insertNotification.rows[0],
+            });
+          }
+        }
+      }
+    }
+    else if (labType === "singlevm-proxmox") {
+
+      // const { data } = await api.get("/cluster/nextid");
+      // const vmId = data.data;
+      const username = userName.replace(' ','-')
+      // Insert lab assignment
+      await pool.query('BEGIN');
+      const insertLab = await pool.query(
+        cartQueries.INSERT_ASSINGLAB_SINGLEVM_PROXMOX_PURCHASED,
+        [labId, userId, duration, null,username]
+      );
+
+      // 
+      await pool.query(
+        cartQueries.INSERT_SINGLEVM_PROXMOX_PURCHASED_LAB_ENROLLMENTS,
+        [1, labId]
+      );
+
+      // Fetch user notification settings
+      const userSettings = await pool.query(
+        labQueries.GET_USER_NOTIFICATION_SETTINGS,
+        [userId]
+      );
+
+      if (userSettings.rowCount > 0) {
+        const settings = userSettings.rows[0];
+        if (
+          settings.inappnotifications &&
+          settings.inappnotifications.includes("lab_assigned")
+        ) {
+          // Get lab and user details for notification text
+          const labResult = await pool.query(proxmoxQueries.GET_LAB_DETAILS, [labId]);
+          const user = await getUserData(userId,sessionToken);
+          const labName = labResult.rows?.[0]?.name || "Lab";
+          const userName = user?.name || "User";
+
+          // Insert notification (make sure your SQL uses RETURNING *)
+          const insertNotification = await pool.query(
+            labQueries.INSERT_NOTIFICATION,
+            [
+              "lab_assigned",
+              "Lab Assigned",
+              `${labName} lab assigned to ${userName}`,
+              "medium",
+              userId,
+              null,
+            ]
+          );
+
+          if (insertNotification.rowCount > 0) {
+            const notificationId = insertNotification.rows[0].id;
+
+            await pool.query(labQueries.INSERT_LAB_NOTIFICATION, [
+              labId,
+              "lab_assigned",
+              null,
+              notificationId,
+            ]);
+            
+            sendNotification({
+              userId: userId,
+              notification: insertNotification.rows[0],
+            });
+          }
+        }
+      }
+    }
+   await pool.query('COMMIT');
+    return res.status(200).send({
+      success: true,
+      message: "Successfully Enrolled",
+    });
+  } catch (error) {
+    console.error(error);
+    await pool.query('ROLLBACK');
+    return res.status(500).send({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
+
+
 module.exports = {
     createCartItem,
     getCartItemsByUserId,
@@ -817,5 +1048,7 @@ module.exports = {
     insertPaymentAndAssignLab,
     getTransactionDetails,
     exportTransactions,
-    userTransactions
+    userTransactions,
+    instaMojoCheckout,
+    insertFreeLab
 }

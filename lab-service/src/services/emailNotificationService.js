@@ -79,6 +79,23 @@ const getUserEmail = async(userId) =>{
     }
 }
 
+const getUserData = async(userId) =>{
+    try {
+        const organizationResult = await pool.query(queries.GET_ORG_USER, [userId]);
+        if (organizationResult.rows.length > 0) {
+            return organizationResult.rows[0];
+        }
+        const userResult = await pool.query(queries.GET_USER, [userId]);
+        if (userResult.rows.length > 0) {
+            return userResult.rows[0];
+        }
+    } catch (error) {
+        console.error('Error fetching user details:', error);
+        throw error;
+        
+    }
+}
+
 const emailPlacehoders = async(p,labId,email)=>{
     try {  
         if(!labId) throw new Error('Lab ID is required for email placeholders');
@@ -147,5 +164,6 @@ module.exports = {
      fetchAllUsersSettings,
      fetchPendingNotificationsForUser,
      getUserEmail,
-     emailPlacehoders
+     emailPlacehoders,
+     getUserData
 };

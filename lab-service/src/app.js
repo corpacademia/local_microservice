@@ -4,9 +4,16 @@ const bodyParser = require('body-parser');
 const cookie = require('cookie-parser');
 const cookieParser = require('cookie-parser');
 const labRouter = require('../src/routes/labRoutes');
+const reviewRouter = require('../src/routes/reviewRoutes');
+const proxmoxRouter = require('../src/routes/proxmoxRoutes');
+const batchRouter = require('../src/routes/batchesRoutes');
+const credentialsRouter = require("../src/routes/cloudCredentialsRoutes");
+const fetchLabsRouter = require("../src/routes/fetchLabsRoutes")
 const path = require('path');
 const fs = require('fs');
 const mime = require('mime-types');
+const session = require("express-session");
+const {sessionMiddleware} = require('../src/config/session');
 
 const app = express();
 const { insertPaymentAndAssignLab } = require('./controllers/labCartController'); 
@@ -16,7 +23,8 @@ const tables = require('./db/labTables');
 tables;
 
 //middlewares
-
+// Session middleware
+// app.use(sessionMiddleware);
 
 // Mount it before any bodyParser middleware
 app.use('/webhook', express.raw({ type: 'application/json' }), insertPaymentAndAssignLab);
@@ -27,6 +35,14 @@ app.use(cors({
     credentials: true
 }));
 app.use(cookieParser());
+// Skip body-parser for multipart/form-data
+app.use((req, res, next) => {
+  if (req.is('multipart/form-data')) {
+    return next(); // skip parsing, let multer/stream handle it
+  }
+  next();
+});
+
 
 // Serve files from the "generated" folder inside "controllers"
 app.use('/generated', express.static(path.join(__dirname, 'controllers')));
@@ -49,9 +65,15 @@ app.use('/uploads/:filename', (req, res) => {
   }
 });
 
+//routes
 app.use('/',labRouter);
+app.use('/',reviewRouter);
+app.use('/',proxmoxRouter);
+app.use('/',batchRouter);
+app.use('/',credentialsRouter);
+app.use('/',fetchLabsRouter)
 
 
 
 
-module.exports = app;
+module.exports = {app,sessionMiddleware};

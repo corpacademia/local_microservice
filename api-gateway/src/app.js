@@ -5,11 +5,14 @@ const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const {initSocket} = require('./socket')
 
 dotenv.config();
 
 const app = express();
-
+const server = http.createServer(app);
+initSocket(server);
 // Middleware
 app.use(morgan("dev"));  // Log requests
 
@@ -23,7 +26,7 @@ app.use(cookieParser());
 const corsOptions = {
   origin: "http://localhost:5173",
   credentials: true,
-  methods: "GET, POST, PUT, DELETE, OPTIONS",
+  methods: "GET, POST,PATCH, PUT, DELETE, OPTIONS",
   allowedHeaders: "Content-Type, Authorization"
 };
 app.use(cors(corsOptions));
@@ -46,4 +49,4 @@ app.use('/api/v1/workspace_ms', require('./routes/workspaces'));
 app.use('/api/v1/cloud_slice_ms', require('./routes/cloudSliceService'));
 app.use('/api/v1/vmcluster_ms',require('./routes/vmClusterService'));
 
-module.exports = app;
+module.exports = {app,server};

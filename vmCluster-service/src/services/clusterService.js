@@ -26,7 +26,8 @@ const createVMClusterDatacenterLab = async (data, userId) => {
   try {
     const { details, type, platform, labGuides, userGuides, clusterConfig } = data;
     const { startDate, startTime, endDate, endTime, vms, users } = clusterConfig;
-    const { title, description,guacamole } = details;
+    const { title, description,guacamoleUrl,guacamoleName,learningObjectives,prerequisites,targetAudience,technologies,additionalDetails } = details;
+    const keyTechnologies = technologies.split(',').map(s=>s.trim()).filter(Boolean);
     // Validation
     if (!title || !description || !type || !platform || !labGuides || !userGuides || !startDate || !endDate) {
       throw new Error("Please provide all the required fields");
@@ -42,8 +43,9 @@ const createVMClusterDatacenterLab = async (data, userId) => {
       userGuides,
       `${startDate} ${startTime}`,
       `${endDate} ${endTime}`,
-      guacamole.name,
-      guacamole.url
+      guacamoleName,
+      guacamoleUrl,
+      learningObjectives,prerequisites,targetAudience,keyTechnologies,additionalDetails
     ]);
 
     if (!result.rows.length) {
@@ -295,9 +297,9 @@ const updateVMClusterDatacenterLab = async(labId , title ,description ,startDate
 
 }
 //update vmcluster datacente catalogue details
-const updateVMClusterDatacenterCatalogueDetails = async(catalogueName,catalogueType,software,labId)=>{
+const updateVMClusterDatacenterCatalogueDetails = async(catalogueName,catalogueType,software,labId,level,category,price)=>{
     try {
-      const updateCatalogue = await pool.query(clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB,[catalogueName,catalogueType,software,labId]);
+      const updateCatalogue = await pool.query(clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB,[catalogueName,catalogueType,software,labId,level,category,price]);
       if(!updateCatalogue.rows.length){
         return [];
       }
@@ -345,21 +347,20 @@ const updateUserVMWithProtocol = async(data)=>{
 const vmclusterDatacenterLabOrgAssignment = async (data) => {
   const client = await pool.connect(); // Get a dedicated client
   try {
-    let { labId, orgId, assignedBy,startDate,endDate } = data;
-    console.log(data)
-    if (!labId || !orgId || !assignedBy || !startDate || !endDate) {
+    let { labId, orgId,admin_id, assignedBy,startDate,endDate } = data;
+    if (!labId || !orgId || !admin_id || !assignedBy || !startDate || !endDate) {
       throw new Error("Please provide all required fields");
     }
 
     await client.query('BEGIN'); // Start transaction
-    const checkAlreadyAssigned = await client.query(clusterQueries.GET_VMCLUSTER_ORGASSIGNMENT_LAB,[labId,orgId]);
+    const checkAlreadyAssigned = await client.query(clusterQueries.GET_VMCLUSTER_ORGASSIGNMENT_LAB,[labId,orgId,admin_id]);
     if(checkAlreadyAssigned.rows.length){
       throw new Error("Lab Already Assigned");
     }
 
     const orgAssignment = await client.query(
       clusterQueries.INSERT_VMCLUSTER_DATACENTER_ORG_ASSIGNMENT,
-      [labId, orgId, assignedBy,startDate,endDate]
+      [labId, orgId,admin_id, assignedBy,startDate,endDate]
     );
     if (!orgAssignment.rows.length) {
       throw new Error('Could not assign the vmclusterdatacenter lab to organization');
@@ -367,14 +368,14 @@ const vmclusterDatacenterLabOrgAssignment = async (data) => {
 
     const updateUserVMCreds = await client.query(
       clusterQueries.UPDATE_VMCLUSTER_DATACENTER_USERVMS_ORG_ASSIGNMENT,
-      [orgId, labId] // <-- update this if NULL is involved, as discussed earlier
+      [orgId, labId,admin_id] // <-- update this if NULL is involved, as discussed earlier
     );
     if (!updateUserVMCreds.rows.length) {
       throw new Error('Could not assign the uservm creds to organization');
     }
     const updateUserGroupCreds = await client.query(
       clusterQueries.UPDATE_USER_GROUP_CREDS,
-      [orgId, labId]
+      [orgId, labId,admin_id]
     );
     if (!updateUserGroupCreds.rows.length) {
       throw new Error('Could not update the user group creds for organization');
@@ -396,13 +397,13 @@ const vmclusterDatacenterLabOrgAssignment = async (data) => {
 };
 
 //get the orgassigned labs
-const getAllTheOrganizationLabs = async (orgId)=>{
+const getAllTheOrganizationLabs = async (orgId,admin_id)=>{
   try {
-    if(!orgId){
+    if(!orgId || !admin_id){
       throw new Error("Please provide the required fieds");
     }
     const orgLabs = await pool.query(clusterQueries.GET_VMCLUSTER_ORGASSIGNMENT,[orgId]);
-
+   
     if(!orgLabs.rows.length){
       return [];
       // throw new Error('No labs found for organiztion');
@@ -615,6 +616,7 @@ const updateUserVMClusterDatacenterStatus = async(labId,userId,status)=>{
 //DELETE USER ASSIGNED DATACENTER LAB
 const deleteDatacenterLabOfUser = async (labId,orgId, userId) => {
     try {
+        console.log(labId,orgId, userId)
         if (!labId || !userId) {
             throw new Error("Please provide the lab id, organization id and user id");
         }

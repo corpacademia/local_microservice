@@ -119,7 +119,7 @@ const createIamUser = async (...args) => {
     }
 
     const scriptPath = path.resolve(__dirname, "../terraformScripts/iamUser.py");
-
+    
     const result = await executeIamScript(scriptPath, ...args);
     return {
       success: true,
@@ -340,7 +340,7 @@ const goldenToInstanceForNewCatalogueLogic = async (instanceType, amiId, storage
   }
 };
 
-const deleteLabService = async (labId, instanceId, amiId, userId) => {
+const deleteLabService = async (labId, instanceId, amiId, userId,purchased) => {
   try {
     if (!labId || !instanceId || !amiId || !userId) {
       console.error("ID is required");
@@ -350,9 +350,15 @@ const deleteLabService = async (labId, instanceId, amiId, userId) => {
     await executePythonScript(scriptPath, [instanceId, amiId]);
 
     // Execute database queries
+    if(purchased){
+    await pool.query(awsQueries.DELETE_PURCHASED_LAB_ASSIGNMENTS, [labId, userId]);
+    await pool.query(awsQueries.DELETE_CLOUD_ASSIGNED_INSTANCE, [labId, userId]);
+    }
+    else{
     await pool.query(awsQueries.DELETE_LAB_ASSIGNMENTS, [labId, userId]);
     await pool.query(awsQueries.DELETE_CLOUD_ASSIGNED_INSTANCE, [labId, userId]);
-
+    }
+  
     return { success: true, message: "Lab deleted successfully" };
   } catch (error) {
     console.log(error)
@@ -421,7 +427,7 @@ const handleLaunchSoftwareOrStopService = async (osName, instanceId, hostname, p
       return {
           success: true,
           message: "Connected to Guacamole and opened in browser",
-          jwtToken,
+          result:jwtToken,
       };
   } catch (error) {
       console.log(error)
@@ -666,7 +672,7 @@ const checkCloudAssignedInstanceLaunchedService = async (lab_id, user_id) => {
   }
 };
 
-const checkLabCloudInstanceLaunchedService = async (lab_id) => {
+const checkLabCloudInstanceLaunchedService = async (lab_id,type) => {
   try {
     if (!lab_id) {
       throw new Error("Missing required parameter: lab_id");

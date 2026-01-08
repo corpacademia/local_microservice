@@ -5,6 +5,92 @@ const verifyToken = require("../middleware/authMiddleware");
 const router = express.Router();
 require('dotenv').config();
 
+//Define public (unauthenticated) route 
+router.post("/getAllLabCatalogues", createProxyMiddleware({
+  target: process.env.LAB_SERVICE_URL || "http://localhost:3002",
+  changeOrigin: true,
+  pathRewrite: { "^/api/v1/lab_ms": "" },
+  onProxyReq: (proxyReq, req, res) => {
+    if (req.body) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader("Content-Type", "application/json");
+      proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.header("Access-Control-Allow-Credentials", "true");
+  },
+  onError: (err, req, res) => {
+    res.status(500).json({ error: "Proxy error", details: err.message });
+  },
+}));
+
+router.post("/getReviews", createProxyMiddleware({
+  target: process.env.LAB_SERVICE_URL || "http://localhost:3002",
+  changeOrigin: true,
+  pathRewrite: { "^/api/v1/lab_ms": "" },
+  onProxyReq: (proxyReq, req, res) => {
+    if (req.body) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader("Content-Type", "application/json");
+      proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.header("Access-Control-Allow-Credentials", "true");
+  },
+  onError: (err, req, res) => {
+    res.status(500).json({ error: "Proxy error", details: err.message });
+  },
+}));
+//Define public (unauthenticated) route 
+router.post("/getLabOnId", createProxyMiddleware({
+  target: process.env.LAB_SERVICE_URL || "http://localhost:3002",
+  changeOrigin: true,
+  pathRewrite: { "^/api/v1/lab_ms": "" },
+  onProxyReq: (proxyReq, req, res) => {
+    if (req.body) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader("Content-Type", "application/json");
+      proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.header("Access-Control-Allow-Credentials", "true");
+  },
+  onError: (err, req, res) => {
+    res.status(500).json({ error: "Proxy error", details: err.message });
+  },
+}));
+
+
+router.post("/getUserPurchasedSinglvmLabsOnLabId", createProxyMiddleware({
+  target: process.env.LAB_SERVICE_URL || "http://localhost:3002",
+  changeOrigin: true,
+  pathRewrite: { "^/api/v1/lab_ms": "" },
+  onProxyReq: (proxyReq, req, res) => {
+    if (req.body) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader("Content-Type", "application/json");
+      proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.header("Access-Control-Allow-Credentials", "true");
+  },
+  onError: (err, req, res) => {
+    res.status(500).json({ error: "Proxy error", details: err.message });
+  },
+}));
+
 router.use(
     "/",verifyToken,
     createProxyMiddleware({

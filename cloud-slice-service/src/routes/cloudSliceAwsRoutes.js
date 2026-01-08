@@ -62,14 +62,21 @@ const {
   updateCloudSliceLabRunningStateOfUser,
   addLabStatusOfUser,
   getUserLabExerciseStatus,
-  updateCatalogueDetails
+  updateCatalogueDetails,
+  getUserPurchasedLabs,
+  updateDates,
+  getCloudSliceDetailsForCatalogue,
+  getUserPurchasedLabOnId
 } = require('../controllers/cloudSliceAwsController')
 
 router.get('/getAwsServices',getAllAwsServices);
-router.post('/createCloudSliceLab',createCloudSliceLab);
+router.post('/createCloudSliceLab',upload.fields([
+    {name:'labDocuments',maxCount:5},
+    {name:'userDocuments',maxCount:5}
+]),createCloudSliceLab);
 router.post('/createLabModules',upload.array('files'),createCloudSliceLabWithModules);
 router.get('/getCloudSlices',getCloudSliceLabByCreatedUserId);
-router.get('/getAllCloudSliceLabs',getAllCloudSliceLabs)
+router.post('/getAllCloudSliceLabs',getAllCloudSliceLabs)
 router.post('/getCloudSliceDetails/:labId',getCloudSliceLabById);
 router.post('/updateCloudSliceServices/:labId',updateServicesOnLabId);
 
@@ -89,7 +96,7 @@ router.post('/createLabExercise',upload.array('files'),createLabExercise);
 router.delete('/deleteCloudSlice/:labId',deleteCloudSliceLab);
 router.put('/updateCloudSlice/:labId',updateCloudSliceLab);
 router.post('/cloudSliceOrgAssignment',cloudSliceOrgAssignment);
-router.get('/getOrgAssignedLabs/:orgId',getCloudSliceLabAssignedToOrg);
+router.post('/getOrgAssignedLabs',getCloudSliceLabAssignedToOrg);
 router.post('/orgAdminDeleteCloudSlice/:id',deleteCloudSliceLabAssignedToOrg);
 router.post('/assignCloudSlice',assignCloudSliceLabToUsers);
 router.get('/getUserCloudSlices/:userId',getUserAssignedCloudSliceLabs);
@@ -101,10 +108,14 @@ router.post('/updateLabStatus',updateCloudSliceLabStatus);
 router.post('/updateLabStatusOfOrg',updateCloudSliceLabStatusOfOrg);
 router.get('/getUserLabStatus/:userId',getUserAssignedLabStatus);
 router.post('/updateLabStatusOfUser',updateCloudSliceLabOfUser);
-router.get('/getOrgAssignedLabDetails/:orgId',getAllLabDetailsForOrgAssigned);
+router.post('/getOrgAssignedLabDetails',getAllLabDetailsForOrgAssigned);
 router.post('/updateUserCloudSliceTimes',updateUserCloudSliceLabTimes);
 router.post('/updateCloudSliceRunningStateOfUser',updateCloudSliceLabRunningStateOfUser);
 router.post('/addLabStatusOfUser',addLabStatusOfUser);
-router.post('/updateCloudsliceCatalogueDetails',updateCatalogueDetails)
+router.post('/updateCloudsliceCatalogueDetails',updateCatalogueDetails);
+router.post("/getCloudSlicePurchasedLabs",getUserPurchasedLabs);
+router.post("/getUserPurchasedLabOnId",getUserPurchasedLabOnId);
+router.post('/updateDates',updateDates);
+router.post('/getCloudSliceDetailsForCatalogue',getCloudSliceDetailsForCatalogue)
 
 module.exports = router;

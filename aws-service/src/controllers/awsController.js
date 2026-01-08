@@ -190,9 +190,9 @@ const goldenToInstanceForNewCatalogue = async (req, res) => {
 
 const deleteVm = async (req, res) => {
   try {
-    const { id, instance_id, ami_id, user_id } = req.body;
+    const { id, instance_id, ami_id, user_id,purchased } = req.body;
 
-    const response = await terraformService.deleteLabService(id, instance_id, ami_id, user_id);
+    const response = await terraformService.deleteLabService(id, instance_id, ami_id, user_id,purchased);
 
     return res.status(200).send(response);
   } catch (error) {
@@ -401,7 +401,7 @@ const getCloudAssignedInstance = async (req, res) => {
     const instance = await terraformService.getCloudAssignedInstanceService(user_id, lab_id);
 
     if (!instance) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
         message: "Invalid credentials or no instance found",
       });
@@ -430,7 +430,7 @@ const checkCloudAssignedInstanceLaunched = async (req, res) => {
     const instance = await terraformService.checkCloudAssignedInstanceLaunchedService(lab_id, user_id);
 
     if (!instance) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
         message: "Invalid credentials or no instance found",
       });
@@ -454,10 +454,10 @@ const checkCloudAssignedInstanceLaunched = async (req, res) => {
 
 const checkLabCloudInstanceLaunched = async (req, res) => {
   try {
-    const { lab_id } = req.body;
+    const { lab_id,type } = req.body;
 
     // Call the service function
-    const instance = await terraformService.checkLabCloudInstanceLaunchedService(lab_id);
+    const instance = await terraformService.checkLabCloudInstanceLaunchedService(lab_id,type);
 
     if (!instance) {
       return res.status(404).json({

@@ -1,7 +1,7 @@
-const app = require('./src/app')
+const {app,server} = require('./src/app')
 
 const PORT = process.env.PORT;
-app.listen(PORT,(err)=>{
+server.listen(PORT,(err)=>{
     if(err){
         console.log("Error running api-gateway service")
     }

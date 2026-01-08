@@ -1,4 +1,5 @@
 const pool = require('../db/dbConfig');
+const organizationQueries = require('./organizationQueries');
 const queries = require('./organizationQueries');
 
 const getAllOrganizations = async () => {
@@ -46,7 +47,9 @@ const createOrganizationService = async (organizationData) => {
             address,
             website,
             org_id,
-            logoPath
+            logoPath,
+            branding_primary_color,
+            branding_secondary_color
         } = organizationData;
 
         const response = await pool.query(queries.CREATE_ORGANIZATION, [
@@ -58,7 +61,9 @@ const createOrganizationService = async (organizationData) => {
             address,
             website,
             org_id,
-            logoPath
+            logoPath,
+             branding_primary_color,
+            branding_secondary_color
         ]);
 
         return response.rows[0] || null;
@@ -101,7 +106,9 @@ const updateOrganizationService = async (orgId, data, logo) => {
                 data.org_type,
                 data.status,
                 data.org_id,
-                orgId
+                orgId,
+                data.branding_primary_color,
+                data.branding_secondary_color
             ];
         } else {
             query = queries.UPDATE_ORGANIZATION_WITH_LOGO;
@@ -115,18 +122,40 @@ const updateOrganizationService = async (orgId, data, logo) => {
                 data.status,
                 data.org_id,
                 logo,
-                orgId
+                orgId,
+                data.branding_primary_color,
+                data.branding_secondary_color
             ];
         }
-
+        await pool.query('BEGIN');
         const result = await pool.query(query, queryParams);
-
+        await pool.query(queries.DEACTIVATE_USERS,['inactive',[orgId]]);
+        await pool.query(queries.DEACTIVATE_ORG_USERS,['inactive',[orgId]]);
+        await pool.query('COMMIT');
         return result.rows.length ? result.rows[0] : null;
     } catch (error) {
+        await pool.query('ROLLBACK');
         console.log(error)
         throw error;
     }
 };
+//approve or reject the organization and its admin
+const approveOrRejectOrg = async(orgId,action)=>{
+    try {
+        await pool.query('BEGIN');
+        const update = await pool.query(organizationQueries.UPDATE_ORGANITION_STATUS,[action === 'approve' ? 'active' : 'rejected',orgId]);
+        if(!update.rows){
+            throw new Error("No organization found to approve or reject");
+        }
+        await pool.query(organizationQueries.UPDATE_ADMIN_STATUS,[action === 'approve' ? 'inactive' : 'rejected',orgId,'orgsuperadmin']);
+        await pool.query('COMMIT');
+        return update.rows;
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        console.log(error);
+        throw error;
+    }
+}
 
 //update organization admin
 const updateOrganizationAdmin = async(orgAdmin,id)=>{
@@ -147,9 +176,18 @@ const updateOrganizationAdmin = async(orgAdmin,id)=>{
 
 const deleteOrganizationsService = async (orgIds) => {
     try {
-        const result = await pool.query(queries.DELETE_ORGANIZATION, [orgIds]);
+        await pool.query('BEGIN');
+        const result = await pool.query(queries.DEACTIVE_ORGANIZATION, ['inactive',orgIds]);
+        if(!result.rows){
+            throw new Error('Could not deactivate the organization');
+        }
+        await pool.query(queries.DEACTIVATE_USERS,['pending',orgIds]);
+        await pool.query(queries.DEACTIVATE_ORG_USERS,['pending',orgIds]);
+
+        await pool.query('COMMIT');
         return result.rows.length ? result.rows : null;
     } catch (error) {
+        await pool.query('ROLLBACK');
         throw error;
     }
 };
@@ -163,5 +201,6 @@ module.exports = {
     getOrganizationStatsService,
     updateOrganizationService,
     deleteOrganizationsService,
-    updateOrganizationAdmin
+    updateOrganizationAdmin,
+    approveOrRejectOrg
 }

@@ -1,20 +1,23 @@
+const { GET_ALL_LABS_FOR_BATCH } = require("./batchesQueries");
+
 module.exports = {
     CREATE_LAB :`
     INSERT INTO createlab 
-    (user_id,type,platform,provider,os,os_version,cpu,ram,storage,instance,title,description,duration,snapshot_type,labguide,userguide,guacamole_name,guacamole_url) 
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) 
+    (user_id,type,platform,provider,os,os_version,cpu,ram,storage,instance,title,description,duration,snapshot_type,labguide,userguide,guacamole_name,guacamole_url,learning_objectives,prerequisites,target_audience,key_technologies,additional_details) 
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) 
     RETURNING *
     `,
+    INSERT_REVIEW:`INSERT INTO reviews (lab_id,user_id,username,rating,review_text) VALUES($1,$2,$3,$4,$5) RETURNING *`,
     INSERT_DATACENTER_LAB:`
     INSERT INTO singlevmdatacenter_lab
-    ( user_id, title, description, type, platform,startdate,enddate, labguide, userguide ,protocol,guacamole_name,guacamole_url)
-    VALUES ($1, $2, $3, $4, $5,$6, $7,$8,$9,$10,$11,$12)
+    ( user_id, title, description, type, platform,startdate,enddate, labguide, userguide ,protocol,guacamole_name,guacamole_url,learning_objectives,prerequisites,target_audience,key_technologies,additional_details)
+    VALUES ($1, $2, $3, $4, $5,$6, $7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
     RETURNING *
     `,
     INSERT_DATACENTER_VM_CREDS:`INSERT INTO datacenter_lab_user_credentials (labid, username, password, ip, port, protocol)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
     INSERT_DATACENTER_VM_ORGASSIGNMENT:`INSERT INTO singlevmdatacenterorgassignment(labid,orgid,admin_id,assigned_by,startdate,enddate) VALUES ($1, $2, $3 ,$4,$5,$6) RETURNING *`,
-    INSERT_DATACENTER_VM_USERASSIGNMENT:`INSERT INTO singlevmdatacenteruserassignment(labid,user_id,assigned_by,startdate,enddate,creds_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+   INSERT_DATACENTER_VM_USERASSIGNMENT :`INSERT INTO singlevmdatacenteruserassignment(labid,user_id,assigned_by,startdate,enddate,creds_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
     GET_ALL_LAB:`
      SELECT * FROM createlab
     `,
@@ -27,7 +30,9 @@ module.exports = {
     GET_DATACENTER_LAB_ON_LAB_ID:`
     SELECT * FROM singlevmdatacenter_lab WHERE lab_id=$1
     `,
+    GET_REVIEWS:`SELECT * FROM reviews where lab_id=$1 `,
     GET_USER_PURCHASED_SINGLEVM_AWS:`SELECT * FROM singlevm_aws_purchased_labs where user_id=$1`,
+    GET_USER_PURCHASED_SINGLEVM_AWS_LABID:`SELECT * FROM singlevm_aws_purchased_labs where labid=$1`,
     GET_USERASSIGNED_SINGLEVM_DATACENTER_LAB:`SELECT * FROM singlevmdatacenteruserassignment where  user_id=$1`,
     CHECK_USERASSIGNED_SINGLEVM_DATACENTER_LAB:`SELECT * FROM singlevmdatacenteruserassignment where labid=$1 and  user_id=$2`,
     GET_DATACENTER_LAB_CREDS:`SELECT * FROM datacenter_lab_user_credentials WHERE labid=$1`,
@@ -40,7 +45,7 @@ module.exports = {
     UPDATE_SINGLEVM_DATACENTER_CONTENT:`UPDATE singlevmdatacenter_lab SET title=$1,description=$2,startdate=$3,enddate=$4,labguide=$5,userguide=$6,software=$7 where lab_id=$8 RETURNING *`,
     UPDATE_SINGLEVM_DATACENTER_CREDS:`UPDATE datacenter_lab_user_credentials SET orgassigned=$1,assigned_by=$2,admin_id=$4 WHERE labid=$3 and orgassigned is NULL and admin_id is NULL RETURNING *`,
     UPDATE_SINGLEVM_DATACENTER_CREDS_RUNNINGSTATE:`UPDATE singlevmdatacenteruserassignment SET isrunning=$1 WHERE user_id=$2 and labid=$3 RETURNING *`,
-    UPDATE_SINGLEVM_DATACENTER_USER_STATUS:`UPDATE singlevmdatacenteruserassignment SET status=$1 WHERE user_id=$2 and labid=$3 RETURNING *`,
+    UPDATE_SINGLEVM_DATACENTER_USER_STATUSS:`UPDATE singlevmdatacenteruserassignment SET status=$1 WHERE user_id=$2 and labid=$3 RETURNING *`,
     
     UPDATE_SINGLEVM_DATACENTER_USER_LAB_TIME:`UPDATE singlevmdatacenteruserassignment SET startdate=$1,enddate=$2 WHERE user_id=$4 and labid=$3 RETURNING *`,
      UPDATE_SINGLEVM_DATACENTER_ORG_LAB_TIME:`UPDATE singlevmdatacenterorgassignment SET startdate=$1,enddate=$2 WHERE orgid=$4 and labid=$3 RETURNING *`,
@@ -73,7 +78,164 @@ module.exports = {
       ;
           `,
 
-    GET_ALL_CATALOGUES:`
+      GET_ALL_CATALOGUES:`
+        -- createlab
+        SELECT 
+            cl.lab_id as id,
+            cl.cataloguename AS title,
+            cl.description,
+            cl.level,
+            cl.category,
+            cl.number_days::INTEGER AS duration,
+            cl.user_id,
+            cl.price,
+            cl.total_enrollments,
+            'singlevm-aws' AS type,
+            CASE
+              WHEN cl.enddate > NOW() THEN 'available'
+              ELSE 'not available'
+            END AS software,
+            CASE 
+              WHEN cl.price::Float <= 0 THEN true 
+              ELSE false 
+            END AS isFree,
+            COALESCE(u.organization, ou.organization) AS provider,
+            COALESCE(AVG(r.rating), 0) AS avg_rating
+        FROM createlab cl
+        LEFT JOIN users u ON cl.user_id = u.id
+        LEFT JOIN organization_users ou ON cl.user_id = ou.id
+        LEFT JOIN reviews r ON cl.lab_id = r.lab_id 
+        WHERE cl.cataloguetype = 'public'
+        GROUP BY cl.lab_id, cl.cataloguename, cl.description, cl.level, cl.category,
+                cl.number_days, cl.user_id, cl.price, cl.enddate,
+                u.organization, ou.organization
+
+        UNION ALL
+
+        -- singlevmdatacenter_lab
+        SELECT 
+            s.lab_id AS id,
+            s.cataloguename AS title,
+            s.description,
+            s.level,
+            s.category,
+            DATE_PART('day', s.enddate - s.startdate) AS duration,
+            s.user_id,
+            s.price,
+            s.total_enrollments,
+            'singlevmdatacenter' AS type,
+            'available' AS software,
+            CASE 
+              WHEN s.price::Float <= 0 THEN true 
+              ELSE false 
+            END AS isFree,
+            COALESCE(u.organization, ou.organization) AS provider,
+            COALESCE(AVG(r.rating), 0) AS avg_rating
+        FROM singlevmdatacenter_lab s
+        LEFT JOIN users u ON s.user_id = u.id
+        LEFT JOIN organization_users ou ON s.user_id = ou.id
+        LEFT JOIN reviews r ON s.lab_id = r.lab_id 
+        WHERE s.cataloguetype = 'public'
+        GROUP BY s.lab_id, s.cataloguename, s.description, s.level, s.category,
+                s.startdate, s.enddate, s.user_id, s.price,
+                u.organization, ou.organization
+
+        UNION ALL
+
+        -- vmclusterdatacenter_lab
+        SELECT 
+            v.labid AS id,
+            v.cataloguename AS title,
+            v.description,
+            v.level,
+            v.category,
+            DATE_PART('day', v.enddate - v.startdate) AS duration,
+            v.user_id,
+            v.price,
+            v.total_enrollments,
+            'vmclusterdatacenter' AS type,
+            'available' AS software,
+            CASE 
+              WHEN v.price::Float <= 0 THEN true 
+              ELSE false 
+            END AS isFree,
+            COALESCE(u.organization, ou.organization) AS provider,
+            COALESCE(AVG(r.rating), 0) AS avg_rating
+        FROM vmclusterdatacenter_lab v
+        LEFT JOIN users u ON v.user_id = u.id
+        LEFT JOIN organization_users ou ON v.user_id = ou.id
+        LEFT JOIN reviews r ON v.labid = r.lab_id 
+        WHERE v.cataloguetype = 'public'
+        GROUP BY v.labid, v.cataloguename, v.description, v.level, v.category,
+                v.startdate, v.enddate, v.user_id, v.price,
+                u.organization, ou.organization
+
+         UNION ALL 
+
+        --singlevm proxmox 
+        SELECT 
+            v.labid AS id,
+            v.cataloguename AS title,
+            v.description,
+            v.level,
+            v.category,
+            DATE_PART('day', v.enddate - v.startdate) AS duration,
+            v.user_id,
+            v.price,
+            v.total_enrollments,
+            'singlevm-proxmox' AS type,
+            'available' AS software,
+            CASE 
+              WHEN v.price::Float <= 0 THEN true 
+              ELSE false 
+            END AS isFree,
+            COALESCE(u.organization, ou.organization) AS provider,
+            COALESCE(AVG(r.rating), 0) AS avg_rating
+        FROM singlevmproxmox_lab v
+        LEFT JOIN users u ON v.user_id = u.id
+        LEFT JOIN organization_users ou ON v.user_id = ou.id
+        LEFT JOIN reviews r ON v.labid = r.lab_id 
+        WHERE v.cataloguetype = 'public'
+        GROUP BY v.labid, v.cataloguename, v.description, v.level, v.category,
+                v.startdate, v.enddate, v.user_id, v.price,
+                u.organization, ou.organization
+
+        UNION ALL
+
+        -- cloudslicelab
+        SELECT 
+            c.labid AS id,
+            c.cataloguename AS title,
+            c.description,
+            c.level,
+            c.category,
+            DATE_PART('day', c.enddate - c.startdate) AS duration,
+            c.createdby AS user_id,
+            c.price,
+            c.total_enrollments,
+            'cloudslice' AS type,
+            'available' AS software,
+            
+            CASE 
+              WHEN c.price::Float <= 0 THEN true 
+              ELSE false 
+            END AS isFree,
+            COALESCE(u.organization, ou.organization) AS provider,
+            COALESCE(AVG(r.rating), 0) AS avg_rating
+          
+        FROM cloudslicelab c
+        LEFT JOIN users u ON c.createdby = u.id
+        LEFT JOIN organization_users ou ON c.createdby = ou.id
+        LEFT JOIN reviews r ON c.labid = r.lab_id
+        
+        WHERE c.cataloguetype = 'public'
+        GROUP BY c.labid, c.cataloguename, c.description, c.level, c.category,
+                c.startdate, c.enddate, c.createdby, c.price,
+                u.organization, ou.organization;
+    `,
+
+    GET_ALL_CATALOGUES_BY_ORG: `
+    -- createlab
     SELECT 
         cl.lab_id as id,
         cl.cataloguename AS title,
@@ -83,6 +245,7 @@ module.exports = {
         cl.number_days::INTEGER AS duration,
         cl.user_id,
         cl.price,
+        cl.total_enrollments,
         'singlevm-aws' AS type,
         CASE
           WHEN cl.enddate > NOW() THEN 'available'
@@ -92,16 +255,22 @@ module.exports = {
           WHEN cl.price::Float <= 0 THEN true 
           ELSE false 
         END AS isFree,
-        COALESCE(u.organization, ou.organization) AS provider
-      FROM createlab cl
-      LEFT JOIN users u ON cl.user_id = u.id
-      LEFT JOIN organization_users ou ON cl.user_id = ou.id
-      WHERE cl.cataloguetype = 'public'
+        COALESCE(u.organization, ou.organization) AS provider,
+        COALESCE(AVG(r.rating), 0) AS avg_rating
+    FROM createlab cl
+    LEFT JOIN users u ON cl.user_id = u.id
+    LEFT JOIN organization_users ou ON cl.user_id = ou.id
+    LEFT JOIN reviews r ON cl.lab_id = r.lab_id 
+    WHERE cl.cataloguetype = 'public'
+      AND COALESCE(u.org_id, ou.org_id) = $1
+    GROUP BY cl.lab_id, cl.cataloguename, cl.description, cl.level, cl.category,
+            cl.number_days, cl.user_id, cl.price, cl.enddate,
+            u.organization, ou.organization, u.org_id, ou.org_id
 
-      UNION ALL
+    UNION ALL
 
-      -- singlevmdatacenter_lab
-      SELECT 
+    -- singlevmdatacenter_lab
+    SELECT 
         s.lab_id AS id,
         s.cataloguename AS title,
         s.description,
@@ -110,22 +279,29 @@ module.exports = {
         DATE_PART('day', s.enddate - s.startdate) AS duration,
         s.user_id,
         s.price,
+        s.total_enrollments,
         'singlevmdatacenter' AS type,
         'available' AS software,
         CASE 
           WHEN s.price::Float <= 0 THEN true 
           ELSE false 
         END AS isFree,
-        COALESCE(u.organization, ou.organization) AS provider
-      FROM singlevmdatacenter_lab s
-      LEFT JOIN users u ON s.user_id = u.id
-      LEFT JOIN organization_users ou ON s.user_id = ou.id
-      WHERE s.cataloguetype = 'public'
+        COALESCE(u.organization, ou.organization) AS provider,
+        COALESCE(AVG(r.rating), 0) AS avg_rating
+    FROM singlevmdatacenter_lab s
+    LEFT JOIN users u ON s.user_id = u.id
+    LEFT JOIN organization_users ou ON s.user_id = ou.id
+    LEFT JOIN reviews r ON s.lab_id = r.lab_id 
+    WHERE s.cataloguetype = 'public'
+      AND COALESCE(u.org_id, ou.org_id) = $1
+    GROUP BY s.lab_id, s.cataloguename, s.description, s.level, s.category,
+            s.startdate, s.enddate, s.user_id, s.price,
+            u.organization, ou.organization, u.org_id, ou.org_id
 
-      UNION ALL
+    UNION ALL
 
-      -- vmclusterdatacenter_lab
-      SELECT 
+    -- vmclusterdatacenter_lab
+    SELECT 
         v.labid AS id,
         v.cataloguename AS title,
         v.description,
@@ -134,22 +310,60 @@ module.exports = {
         DATE_PART('day', v.enddate - v.startdate) AS duration,
         v.user_id,
         v.price,
+        v.total_enrollments,
         'vmclusterdatacenter' AS type,
         'available' AS software,
         CASE 
           WHEN v.price::Float <= 0 THEN true 
           ELSE false 
         END AS isFree,
-        COALESCE(u.organization, ou.organization) AS provider
-      FROM vmclusterdatacenter_lab v
-      LEFT JOIN users u ON v.user_id = u.id
-      LEFT JOIN organization_users ou ON v.user_id = ou.id
-      WHERE v.cataloguetype = 'public'
+        COALESCE(u.organization, ou.organization) AS provider,
+        COALESCE(AVG(r.rating), 0) AS avg_rating
+    FROM vmclusterdatacenter_lab v
+    LEFT JOIN users u ON v.user_id = u.id
+    LEFT JOIN organization_users ou ON v.user_id = ou.id
+    LEFT JOIN reviews r ON v.labid = r.lab_id 
+    WHERE v.cataloguetype = 'public'
+      AND COALESCE(u.org_id, ou.org_id) = $1
+    GROUP BY v.labid, v.cataloguename, v.description, v.level, v.category,
+            v.startdate, v.enddate, v.user_id, v.price,
+            u.organization, ou.organization, u.org_id, ou.org_id
 
-      UNION ALL
+    UNION ALL
 
-      -- cloudslicelab
-      SELECT 
+    -- singlevm-proxmox
+    SELECT 
+        v.labid AS id,
+        v.cataloguename AS title,
+        v.description,
+        v.level,
+        v.category,
+        DATE_PART('day', v.enddate - v.startdate) AS duration,
+        v.user_id,
+        v.price,
+        v.total_enrollments,
+        'singlevm-proxmox' AS type,
+        'available' AS software,
+        CASE 
+          WHEN v.price::Float <= 0 THEN true 
+          ELSE false 
+        END AS isFree,
+        COALESCE(u.organization, ou.organization) AS provider,
+        COALESCE(AVG(r.rating), 0) AS avg_rating
+    FROM singlevmproxmox_lab v
+    LEFT JOIN users u ON v.user_id = u.id
+    LEFT JOIN organization_users ou ON v.user_id = ou.id
+    LEFT JOIN reviews r ON v.labid = r.lab_id 
+    WHERE v.cataloguetype = 'public'
+      AND COALESCE(u.org_id, ou.org_id) = $1
+    GROUP BY v.labid, v.cataloguename, v.description, v.level, v.category,
+            v.startdate, v.enddate, v.user_id, v.price,
+            u.organization, ou.organization, u.org_id, ou.org_id
+
+    UNION ALL
+
+    -- cloudslicelab
+    SELECT 
         c.labid AS id,
         c.cataloguename AS title,
         c.description,
@@ -158,19 +372,125 @@ module.exports = {
         DATE_PART('day', c.enddate - c.startdate) AS duration,
         c.createdby AS user_id,
         c.price,
+        c.total_enrollments,
         'cloudslice' AS type,
         'available' AS software,
         CASE 
           WHEN c.price::Float <= 0 THEN true 
           ELSE false 
         END AS isFree,
-        COALESCE(u.organization, ou.organization) AS provider
-      FROM cloudslicelab c
-      LEFT JOIN users u ON c.createdby = u.id
-      LEFT JOIN organization_users ou ON c.createdby = ou.id
-      WHERE c.cataloguetype = 'public';
-      `,
+        COALESCE(u.organization, ou.organization) AS provider,
+        COALESCE(AVG(r.rating), 0) AS avg_rating
+    FROM cloudslicelab c
+    LEFT JOIN users u ON c.createdby = u.id
+    LEFT JOIN organization_users ou ON c.createdby = ou.id
+    LEFT JOIN reviews r ON c.labid = r.lab_id
+    WHERE c.cataloguetype = 'public'
+      AND COALESCE(u.org_id, ou.org_id) = $1
+    GROUP BY c.labid, c.cataloguename, c.description, c.level, c.category,
+            c.startdate, c.enddate, c.createdby, c.price,
+            u.organization, ou.organization, u.org_id, ou.org_id;
+    `,
+            GET_ALL_LABS: `
+          SELECT 
+              lab_id AS labid,
+              title,
+              'singlevm' as type,
+              user_id AS userid,
+              (enddate - (number_days * INTERVAL '1 day')) AS startdate,
+              (enddate - (number_days * INTERVAL '1 day'))::time AS starttime,
+              enddate,
+              enddate::time AS endtime
+          FROM createlab
 
+          UNION ALL
+
+          SELECT
+              lab_id AS labid,
+              title,
+              'singlevm-datacenter' as type,
+              user_id AS userid,
+              startdate,
+              startdate::time AS starttime,
+              enddate,
+              enddate::time AS endtime
+          FROM singlevmdatacenter_lab
+
+          UNION ALL
+              
+          SELECT
+              labid,
+              title,
+              type,
+              user_id AS userid,
+              startdate,
+              startdate::time AS starttime,
+              enddate,
+              enddate::time AS endtime
+          FROM vmclusterdatacenter_lab
+
+          UNION ALL
+
+          SELECT
+              labid,
+              title,
+              'cloudslice' AS type,
+              createdby AS userid,
+              startdate,
+              startdate::time AS starttime,
+              enddate,
+              enddate::time AS endtime
+          FROM cloudslicelab
+
+          UNION ALL
+
+          SELECT
+              labid,
+              title,
+              'singlevm-proxmox' as type,
+              user_id AS userid,
+              startdate,
+              startdate::time AS starttime,
+              enddate,
+              enddate::time AS endtime
+          FROM singlevmproxmox_lab
+          `,
+
+         GET_ALL_USER_PURCHASED_LABS:`
+ SELECT 
+  labid,
+  user_id,
+  start_date,
+  completions_date AS end_date,
+  status,
+  duration
+FROM singlevm_aws_purchased_labs
+WHERE user_id = $1
+
+UNION ALL
+
+SELECT 
+  labid,
+  user_id,
+  start_date,
+  end_date,
+  status,
+  duration
+FROM cloudslice_purchased_labs
+WHERE user_id = $1
+
+UNION ALL
+
+SELECT 
+  labid,
+  user_id,
+  startdate AS start_date,
+  enddate AS end_date,
+  status,
+  duration::text
+FROM singlevmproxmox_purchased_labs
+WHERE user_id = $1;
+            `,
             UPDATE_CREATELAB_CATALOGUE: `
             UPDATE createlab
             SET cataloguetype = 'private'
@@ -269,9 +589,9 @@ UPDATE_CLOUDSLICE_CATALOGUE_DETAILS: `
     CHECK_LAB_ASSIGNMENT: `SELECT * FROM lab_batch WHERE lab_id = $1 AND admin_id = $2 AND org_id = $3`,
     INSERT_LAB_BATCH: `INSERT INTO lab_batch(lab_id, admin_id, org_id, configured_by,enddate,startdate,assigned_at) 
                        VALUES($1, $2, $3, $4, $5,NOW(),NOW()) RETURNING *`,
-    GET_SINGLEVM_DATACENTER_ORG:`SELECT * FROM singlevmdatacenterorgassignment where  orgid=$1 and admin_id=$2`,
+    GET_SINGLEVM_DATACENTER_ORG:`SELECT * FROM singlevmdatacenterorgassignment where  orgid=$1 `,
     GET_SINGLEVM_DATACENTER_ORG_LAB:`SELECT * FROM singlevmdatacenterorgassignment where labid=$1 and  orgid=$2 and admin_id=$3`,
-    GET_LAB_BATCH_BY_ADMIN: `SELECT * FROM lab_batch WHERE admin_id=$1`,
+    GET_LAB_BATCH_BY_ADMIN: `SELECT * FROM lab_batch WHERE org_id=$1`,
     GET_ALL_SOFTWARE_DETAILS: `SELECT * FROM createlab`,
     CHECK_LAB_BATCH_ASSESSMENT: `SELECT * FROM lab_batch WHERE admin_id=$1 AND org_id=$2`,
     GET_CONFIGURED_LABS: `
@@ -315,6 +635,8 @@ FROM (
     SELECT lab_id FROM createlab WHERE user_id = $1
     UNION ALL
     SELECT lab_id FROM singlevmdatacenter_lab WHERE user_id = $1
+    UNION ALL
+    SELECT labid FROM singlevmproxmox_lab WHERE user_id = $1
   ) AS combined
 
   UNION ALL
@@ -338,6 +660,8 @@ FROM (
     SELECT lab_id FROM labassignments WHERE user_id = $1
     UNION ALL
     SELECT labid FROM singlevmdatacenterorgassignment WHERE orgid = $2
+    UNION ALL
+    SELECT labid FROM singlevmproxmoxorgassignment WHERE orgid = $2
   ) AS combined
 
   UNION ALL
@@ -353,6 +677,81 @@ FROM (
   WHERE orgid = $2
 ) AS subquery;
 `,
+GET_ALL_ORG_ASSIGNED_LABS: `
+SELECT
+  cl.lab_id,
+  cl.title,
+  cl.user_id,
+  lb.startdate,
+  lb.enddate,
+  lb.status,
+  'singlevm-aws' AS type
+FROM lab_batch lb
+JOIN createlab cl
+  ON cl.lab_id = lb.lab_id
+WHERE lb.org_id = $1
+
+UNION
+
+SELECT
+  csl.labid AS lab_id,
+  csl.title,
+  csl.createdby AS user_id,
+  coa.startdate,
+  coa.enddate,
+  coa.status,
+  'cloudslice' AS type
+FROM cloudsliceorgassignment coa
+JOIN cloudslicelab csl
+  ON csl.labid = coa.labid
+WHERE coa.orgid = $1
+
+UNION
+
+SELECT
+  sp.labid AS lab_id,
+  sp.title,
+  sp.user_id,
+  soa.startdate,
+  soa.enddate,
+  soa.status,
+  'singlevm-proxmox' AS type
+FROM singlevmproxmoxorgassignment soa
+JOIN singlevmproxmox_lab sp
+  ON sp.labid = soa.labid
+WHERE soa.orgid = $1
+
+UNION
+
+SELECT
+  sd.lab_id,
+  sd.title,
+  sd.user_id,
+  sdoa.startdate,
+  sdoa.enddate,
+  sdoa.status,
+  'singlevm-datacenter' AS type
+FROM singlevmdatacenterorgassignment sdoa
+JOIN singlevmdatacenter_lab sd
+  ON sd.lab_id = sdoa.labid
+WHERE sdoa.orgid = $1
+
+UNION
+
+SELECT
+  vc.labid AS lab_id,
+  vc.title,
+  vc.user_id,
+  vcoa.startdate,
+  vcoa.enddate,
+  vcoa.status,
+  'vmcluster-datacenter' AS type
+FROM vmclusterdatacenterorgassignment vcoa
+JOIN vmclusterdatacenter_lab vc
+  ON vc.labid = vcoa.labid
+WHERE vcoa.orgid = $1
+`,
+
 GET_ALL_CLOUDSLICE_LABS_ORG:`Select * from cloudsliceorgassignment where orgid=$1`,
 GET_CLOUDSLICE_LABS_LABID: `select * from cloudslicelab where labid=$1`,
 
@@ -368,6 +767,8 @@ DELETE_SINGLEVM_DATACENTER_FROM_USER:`DELETE FROM singlevmdatacenteruserassignme
 DELETE_USER_CRED_FROM_CREDS: `UPDATE datacenter_lab_user_credentials set assigned_to=$1 where assigned_to=$2`,
 DELETE_SINGLEVM_DATACENTER_ORGASSINGMENT_FROM_ORG:`DELETE FROM singlevmdatacenterorgassignment WHERE labid=$1 AND orgid=$2`,
 DELETE_SINGLEVM_DATACENTER_CREDS_FROM_ORG:`UPDATE datacenter_lab_user_credentials SET assigned_to=$1,orgassigned=$2 where orgassigned=$3`,
+
+DELETE_REVIEW:`DELETE FROM reviews where id=$1 RETURNING *`,
 
 GET_ORG_USER:`SELECT email FROM organization_users WHERE id = $1`,
 GET_USER:`SELECT email FROM users WHERE id = $1`,
@@ -425,6 +826,16 @@ GET_STATUS_CLOUDSLICE_USER:`SELECT labid, status FROM cloudsliceuserassignment
       WHERE end_date < NOW() AND status != 'expired'`,
 GET_STATUS_CLOUDSLICE_USER_PURCHASED:`SELECT labid, status FROM cloudslice_purchased_labs
       WHERE end_date < NOW() AND status != 'expired'`,
+    
+      //singlevm-proxmox
+GET_STATUS_SINGLEVM_PROXMOX_LAB:`SELECT labid, status FROM singlevmproxmox_lab
+      WHERE enddate < NOW() AND status != 'expired'`,
+GET_STATUS_SINGLEVM_PROXMOX_ORG:`SELECT labid, status FROM singlevmproxmoxorgassignment
+      WHERE enddate < NOW() AND status != 'expired'`,
+GET_STATUS_SINGLEVM_PROXMOX_USER:`SELECT labid, status FROM singlevmproxmoxuserassignment
+      WHERE enddate < NOW() AND status != 'expired'`,
+GET_STATUS_SINGLEVM_PROXMOX_USER_PURCHASED:`SELECT labid, status FROM singlevmproxmox_purchased_labs
+      WHERE enddate < NOW() AND status != 'expired'`,
 
 //modulat lab status
 GET_CLOUDSLICE_MODULAR_LAB :`SELECT * FROM cloudslicelab where modules='with-modules'`,
@@ -477,6 +888,11 @@ UPDATE_cloudslice_USER_STATUS:`UPDATE cloudsliceuserassignment set status = 'exp
 UPDATE_cloudslice_USER_PURCHASED_STATUS:`UPDATE cloudslice_purchased_labs set status = 'expired' where end_date<NOW() and status!='expired'`,
 UPDATE_CLOUDSLICE_USER_MODULAR:`UPDATE cloudsliceuserassignment set status=$1 where user_id = $2 and labid=$3`,
 UPDATE_CLOUDSLICE_USER_PURCHASED_MODULAR:`UPDATE cloudslice_purchased_labs set status=$1 where user_id = $2 and labid=$3`,
+
+UPDATE_SINGLEVM_PROXMOX_LAB_STATUS:`UPDATE singlevmproxmox_lab set status = 'expired' where enddate<NOW() and status!='expired'`,
+UPDATE_SINGLEVM_PROXMOX_ORG_STATUS:`UPDATE singlevmproxmoxorgassignment set status = 'expired' where enddate<NOW() and status!='expired'`,
+UPDATE_SINGLEVM_PROXMOX_USER_STATUS:`UPDATE singlevmproxmoxuserassignment set status = 'expired' where enddate<NOW() and status!='expired'`,
+UPDATE_SINGLEVM_PROXMOX_USER_PURCHASED_STATUS:`UPDATE singlevmproxmox_purchased_labs set status = 'expired' where enddate<NOW() and status!='expired'`,
 
 
 //get notifications of user

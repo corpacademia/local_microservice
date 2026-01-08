@@ -1,6 +1,25 @@
 const cron = require('node-cron');
 const pool =  require('../db/dbConfig');
 const labQueries = require('./labQueries');
+const batchesQueries = require('./batchesQueries');
+const {getUserEmail,getUserData} = require('./emailNotificationService');
+const path = require('path');
+const { sendNotificationToMail } = require('./notificationServices');
+
+const Settings = async(userId,email,type,typeDescription,message,med,metadata)=>{
+  try {
+      //send mail to organiztion admin
+   const userSettings = await pool.query(batchesQueries.GET_USER_NOTIFICATION_SETTINGS, [userId]);
+        if (userSettings.rowCount > 0) {
+           const settings = userSettings.rows[0];
+           const adminMail = await getUserEmail(userId);
+           const insertNotification = await pool.query(batchesQueries.INSERT_NOTIFICATION, [type, typeDescription, message,med, userId,[JSON.stringify(metadata)] ]);
+  } 
+  return userSettings.rows[0];
+} catch (error) {
+    console.log("Error:",error)
+  }
+}
 
 const expireLabsAndLog =async  ({
   fetchQuery,
@@ -167,6 +186,166 @@ const sendSoftwareExpiryNotification = async()=>{
 
 }
 
+//update remaining days of batch lab
+const updateRemainingDaysOfBatchLab = async()=>{
+    try {
+        const getAllBatchLabs = await pool.query(batchesQueries.GET_ALL_BATCH_LABS);
+        if(!getAllBatchLabs.rows.length){
+          console.log('No labs found for this batch');
+          return;
+        }
+        const updateRemainingDaysOfBatchLab = await pool.query(batchesQueries.UPDATE_REMAINING_DAYS);
+        console.log("Remaining days of batch labs is updated");
+    } catch (error) {
+      console.log('Error in updating the remaining days')
+    }
+}
+const deleteBatchById = async (batchId) => {
+  if (!batchId) {
+    throw new Error("BatchId is required");
+  }
+
+  await pool.query('BEGIN');
+
+  try {
+    const getBatchUsers = await pool.query(
+      batchesQueries.GET_USERSOF_BATCH,
+      [batchId]
+    );
+
+    const getBatchLabs = await pool.query(
+      batchesQueries.GET_BATCH_LABS,
+      [batchId]
+    );
+
+    if (getBatchLabs.rows.length && getBatchUsers.rows.length) {
+      for (const lab of getBatchLabs.rows) {
+        for (const user of getBatchUsers.rows) {
+          await pool.query(batchesQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [lab.lab_id, user.user_id]);
+          await pool.query(batchesQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [lab.lab_id, user.user_id]);
+          await pool.query(batchesQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [lab.lab_id, user.user_id]);
+          await pool.query(batchesQueries.DELETE_USER_CRED_FROM_CREDS, [null, user.user_id]);
+          await pool.query(batchesQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER, [lab.lab_id, user.user_id]);
+          await pool.query(batchesQueries.DELETE_RANDOM_USER_CREDS, [lab.lab_id, user.user_id]);
+          await pool.query(batchesQueries.DELETE_USER_DATACENTER_LAB, [lab.lab_id, user.user_id]);
+        }
+      }
+
+      await pool.query(batchesQueries.DELETE_USERS_FROM_BATCH, [batchId]);
+    }
+
+    await pool.query(batchesQueries.DELETE_LABS_FROM_BATCH, [batchId]);
+
+    const result = await pool.query(
+      batchesQueries.DELETE_BATCHES,
+      [batchId]
+    );
+
+    if (!result.rows.length) {
+      throw new Error("Batch not found");
+    }
+
+    await pool.query('COMMIT');
+    return result.rows[0];
+
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    throw err;
+  }
+};
+
+
+//delete the batch and its details when expires
+const deleteBatchDetails = async () => {
+  try {
+    const now = new Date();
+
+    const { rows: batches } = await pool.query(
+      batchesQueries.GET_ALL_BATCHES
+    );
+
+    if (!batches.length) {
+      console.log("No batches found");
+      return;
+    }
+
+    for (const batch of batches) {
+      const endDate = new Date(batch.enddate);
+
+      // Skip active batches immediately
+      if (endDate >= now) continue;
+
+      console.log(`Deleting expired batch: ${batch.id}`);
+
+      // Fetch related data ONLY for expired batches
+      const [{ rows: labs }, { rows: users }] = await Promise.all([
+        pool.query(batchesQueries.GET_BATCH_LABS, [batch.id]),
+        pool.query(batchesQueries.GET_USERSOF_BATCH, [batch.id]),
+      ]);
+
+      // Delete batch
+      await deleteBatchById(batch.id);
+
+      // Build metadata
+      const metadata = {
+        batchName: batch.name,
+        startDate: batch.startdate,
+        endDate: batch.enddate,
+
+        users: users.map(u => ({
+          name: u.name,
+          email: u.email,
+        })),
+
+        labs: labs.map(l => ({
+          labName: l.lab_name,
+          startDate: l.start_date,
+          endDate: l.end_date,
+        })),
+      };
+
+      const email = await getUserEmail(batch.created_by);
+
+      const settings = await Settings(
+        batch.created_by,
+        email,
+        'batch_deletion',
+        'Batch Deletion Notification',
+        `Batch ${batch.name} and its details deleted successfully`,
+        'high',
+        metadata
+      );
+
+      if (settings?.emailnotifications?.includes('batch_deletion')) {
+        const htmlTemplate = path.join(
+          process.cwd(),
+          'public/templates/notification-email-template.html'
+        );
+        console.log('Email:',email)
+        await sendNotificationToMail(htmlTemplate, {
+          title: 'Batch Deletion Notification',
+          priority: 'high',
+          message: `Batch "${batch.name}" has been deleted successfully.`,
+          metadata,
+          actionUrl: 'https://app.golabing.ai/login',
+          actionText: 'Login Now',
+          formattedDate: new Date().toLocaleString(),
+          notificationType: 'batch_deletion',
+          unsubscribeUrl: 'https://example.com/unsubscribe',
+          preferencesUrl: 'https://example.com/preferences',
+          email,
+        });
+      }
+    }
+  } catch (error) {
+    console.error(
+      "Error deleting batch and its details:",
+      error.message
+    );
+  }
+};
+
+
 //execute
 const executeCron = () =>{
 //single vm aws
@@ -304,12 +483,55 @@ cron.schedule('*/1 * * * *', async () => {
   });
 });
 
+//singlevm-proxmox 
+cron.schedule('*/1 * * * *', async () => {
+  await expireLabsAndLog({
+    fetchQuery: labQueries.GET_STATUS_SINGLEVM_PROXMOX_LAB,
+    updateQuery: labQueries.UPDATE_SINGLEVM_PROXMOX_LAB_STATUS,
+    logQuery: labQueries.INSERT_LAB_STATUS_LOGS,
+    labType: 'singlevm-proxmox',
+    ownerType: 'lab'
+  });
+});
+
+cron.schedule('*/1 * * * *', async () => {
+  await expireLabsAndLog({
+    fetchQuery: labQueries.GET_STATUS_SINGLEVM_PROXMOX_ORG,
+    updateQuery: labQueries.UPDATE_SINGLEVM_PROXMOX_ORG_STATUS,
+    logQuery: labQueries.INSERT_LAB_STATUS_LOGS,
+    labType: 'singlevm-proxmox',
+    ownerType: 'org'
+  });
+});
+
+cron.schedule('*/1 * * * *', async () => {
+  await expireLabsAndLog({
+    fetchQuery: labQueries.GET_STATUS_SINGLEVM_PROXMOX_USER,
+    updateQuery: labQueries.UPDATE_SINGLEVM_PROXMOX_USER_STATUS,
+    logQuery: labQueries.INSERT_LAB_STATUS_LOGS,
+    labType: 'singlevm-proxmox',
+    ownerType: 'user'
+  });
+});
+
+cron.schedule('*/1 * * * *', async () => {
+  await expireLabsAndLog({
+    fetchQuery: labQueries.GET_STATUS_SINGLEVM_PROXMOX_USER_PURCHASED,
+    updateQuery: labQueries.UPDATE_SINGLEVM_PROXMOX_USER_PURCHASED_STATUS,
+    logQuery: labQueries.INSERT_LAB_STATUS_LOGS,
+    labType: 'singlevm-proxmox',
+    ownerType: 'user-purchased'
+  });
+});
+
+
 //cloudslice modular lab status of user
 // Schedule the job to run every 1 minute
 cron.schedule('*/1 * * * *', async () => {
   console.log('Running updateUserCloudsliceModularLabStatus() via cron');
   try {
     await updateUserCloudsliceModularLabStatus();
+    await deleteBatchDetails();
     console.log('Lab status update completed successfully.');
   } catch (error) {
     console.error('Error running updateUserCloudsliceModularLabStatus in cron:', error);
@@ -330,6 +552,12 @@ cron.schedule('*/1 * * * *', async () => {
     fetchQuery: labQueries.GET_ALL_USER_CLOUDSLICE_PURCHASED_LABS,
     updateQuery: labQueries.UPDATE_CLOUDSLICE_USER_PURCHASED_MODULAR,
   });
+});
+
+//update the remaining days of batch labs
+cron.schedule('0 0 * * *', () => {
+  console.log('Running cron to update batchlabs remaining days...');
+  updateRemainingDaysOfBatchLab();
 });
 }
 

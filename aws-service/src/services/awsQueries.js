@@ -2,6 +2,7 @@ module.exports = {
     GET_INSTANCES_QUERY : `SELECT * FROM {table} WHERE vcpu = $1 AND memory = $2`,
     GET_INSTANCES_QUERY_FOR_PRICING: `SELECT * FROM {table} WHERE REPLACE({column}, E'\n', '') = $1 AND vcpu = $2 AND memory = $3`,
     DELETE_LAB_ASSIGNMENTS: `DELETE FROM labassignments WHERE lab_id = $1 AND user_id = $2`,
+    DELETE_PURCHASED_LAB_ASSIGNMENTS: `DELETE FROM singlevm_aws_purchased_labs WHERE labid = $1 AND user_id = $2`,
     DELETE_CLOUD_ASSIGNED_INSTANCE: `DELETE FROM cloudassignedinstance WHERE lab_id = $1 AND user_id = $2`,
     DELETE_AMI_INFORMATION: `DELETE FROM amiinformation WHERE lab_id = $1`,
     DELETE_INSTANCES: `DELETE FROM instances WHERE lab_id = $1`,

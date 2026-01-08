@@ -14,7 +14,7 @@ DB_CONFIG = {
 }
 
 # Ensure correct private key path (Update if needed)
-KEY_PAIR_PATH = r"C:\Users\Admin\Downloads\Aws2.pem"
+KEY_PAIR_PATH = r"C:\Users\Admin\Downloads\golabing_key.pem"
 
 def extract_and_store_password(user_id, public_ip, instance_id):
     """Tries to decrypt password every 4 seconds after 100 seconds, up to a total of 5 minutes."""

@@ -3,6 +3,8 @@ const {hashPassword , comparePassword,signJwt,verifyToken} = require('../helper/
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const userServices = require('../services/userServices');
+const { create } = require('../../../lab-service/src/config/proxmoxApi');
+
 
 
 dotenv.config();
@@ -14,7 +16,6 @@ dotenv.config();
 //   password:process.env.password,
 //   port: process.env.port,
 // });
-
 
 const signupController = async (req, res) => {
     try {
@@ -49,11 +50,76 @@ const signupController = async (req, res) => {
     }
 };
 
+//upload bulk users
+const uploadBulkUsers = async(req,res)=>{
+  try {
+      const {users,organizationId,createdBy,orgName,orgType,role} = req.body;
+      if(users.length ===0 || !organizationId || !createdBy ||!role){
+          return res.status(400).send({
+            success:false,
+            message:"Please provide the required fields"
+          })
+      }
+      const addBulk = await userServices.bulkAddUser(users,organizationId,createdBy,orgName,orgType,role);
+      if(!addBulk){
+        return res.status(404).send({
+          success:false,
+          message:"Could not add the users"
+        })
+      }
+      return res.status(200).send({
+        success:true,
+        message:'Successfully added users',
+        data:addBulk
+      })
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send({
+      success:false,
+      message:"Internal server error",
+      error:error.message
+    })
+  }
+}
+
+//user approve
+const userApprove = async(req,res)=>{
+  try {
+    const {userId} = req.params;
+    const {status,updatedBy} = req.body;
+    if(!userId || !status ||!updatedBy){
+      return res.status(400).send({
+        success:false,
+        message:"Please provide required fields"
+      })
+    }
+    const update = await userServices.userApprove(userId,updatedBy,status);
+    if(!update){
+      return res.status(404).send({
+        success:false,
+        message:"Could not update approval status"
+      })
+    }
+    return res.status(200).send({
+      success:true,
+      message:"Successfull updated user status",
+      data:update.rows
+    })
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send({
+      success:false,
+      message:"Internal server error",
+      error:error.message
+    })
+  }
+}
+
 //send email verification link
 const sendVerificationEmail = async (req,res) => {
   try {
-    const {email} = req.body;
-    const result = await userServices.sendVerificationEmail(email);
+    const {email,type} = req.body;
+    const result = await userServices.sendVerificationEmail(email,type);
     if (!result) {
       return res.status(400).send({
         success: false,
@@ -65,6 +131,7 @@ const sendVerificationEmail = async (req,res) => {
       message: "Verification email sent successfully"
     });
   } catch (error) {
+    console.log(error)
     return res.status(500).send({
       success: false,
       message: "Could not send verification email",
@@ -86,17 +153,48 @@ const verifyEmailCode = async (req, res) => {
     }
     return res.status(200).send({
       success: true,
-      message: "Email verified successfully"
+      message: "Email verified successfully",
+      resetToken:code
     });
   } catch (error) {
     console.log(error)
     return res.status(500).send({
       success: false,
-      message: "Could not verify email",
+      message:'Internal server error',
       error: error.message
     });
   }
 };
+const resetPassword = async(req,res)=>{
+  try {
+    const {email,newPassword} = req.body;
+    if(!email || !newPassword){
+      return res.status(400).send({
+        success:false,
+        message:"Please provide all required fields"
+      })
+    }
+    const updatePassword = await userServices.resetPassword(email,newPassword);
+    if(!updatePassword.rows.length){
+      return res.status(404).send({
+        success:false,
+        message:"Could not update the password"
+      })
+    }
+    return res.status(200).send({
+      success:true,
+      message:"Successfully updated the password",
+      data:updatePassword.rows
+    })
+  } catch (error) {
+    console.log("Error:",error);
+     return res.status(500).send({
+            success: false,
+            message: "Internal Server Error",
+            error: error.message
+        });
+  }
+}
 
 const loginController = async (req, res) => {
     try {
@@ -355,7 +453,7 @@ const addOrganizationUser = async (req, res) => {
   // Controller: Get Organization Users
   const getOrganizationUser = async (req, res) => {
     try {
-      const users = await userServices.getOrganizationUsers(req.body.admin_id);
+      const users = await userServices.getOrganizationUsers(req.body.org_id);
       
       if (!users.length) {
         return res.status(404).send({
@@ -417,9 +515,9 @@ const addOrganizationUser = async (req, res) => {
   // Controller: Update User Profile
   const updateUserProfile = async (req, res) => {
     try {
-      const {id , name, email, password, phone, location } = req.body;
+      const {userId , name, email, password, phone, location,currentPassword } = req.body;
       const profilePhoto = req.files[0] ? req.files[0].path : null;
-      const updatedUser = await userServices.updateUserProfile(id, name, email, password, phone, location, profilePhoto);
+      const updatedUser = await userServices.updateUserProfile(userId, name, email, password, phone, location, profilePhoto,currentPassword);
       if (!updatedUser) {
         return res.status(404).send({
           success: true,
@@ -463,5 +561,8 @@ module.exports={
     deleteRandomUsers,
     updateUserProfile,
     sendVerificationEmail,
-    verifyEmailCode
+    verifyEmailCode,
+    uploadBulkUsers,
+    userApprove,
+    resetPassword
 }

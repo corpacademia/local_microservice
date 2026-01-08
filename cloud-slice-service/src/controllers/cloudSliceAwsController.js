@@ -34,14 +34,12 @@ const getAllAwsServices = async(req,res)=>{
 //create cloud slice lab
 const createCloudSliceLab = async(req,res)=>{
     try {
-        const {createdBy,labData} = req.body;
-        if(!labData){
-            return res.status(400).send({
-                success:false,
-                message:"Please provide lab data"
-            })
-        }
-        const result = await cloudSliceAwsService.createCloudSliceLab(createdBy,labData);
+        const {createdBy,...labData} = req.body;
+        const labDocs =  req.files?.labDocuments?.map((file)=>file.path);
+        const labDocsArray = labDocs?.length > 0 ? labDocs :null; 
+        const userDocs = req.files?.userDocuments?.map((file)=>file.path);
+        const userDocsArray = userDocs?.length > 0 ? userDocs : null; 
+        const result = await cloudSliceAwsService.createCloudSliceLab(createdBy,labDocsArray,userDocsArray,labData);
         if(!result){
             return res.status(400).send({
                 success:false,
@@ -99,9 +97,10 @@ const createCloudSliceLabWithModules = async(req,res)=>{
             }
             const result = await cloudSliceAwsService.getCloudSliceLabsByCreatedUser(userId);
             if(!result.length){
-                return res.status(404).send({
-                    success:false,
-                    message:"No cloud slice labs found"
+                return res.status(200).send({
+                    success:true,
+                    message:"No cloud slice labs found",
+                    data:[]
                 })
             }
             return res.status(200).send({
@@ -150,7 +149,36 @@ const getCloudSliceLabById = async(req,res)=>{
         })
     }
 }
-
+const getCloudSliceDetailsForCatalogue = async(req,res)=>{
+    try {
+        const {labId} = req.body;
+        if(!labId){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide lab id"
+            })
+        }
+        const result = await cloudSliceAwsService.getCloudSliceDetailsForCatalogue(labId);
+        if(!result){
+            return res.status(404).send({
+                success:false,
+                message:"No cloud slice details found for this lab id"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully fetched cloud slice details",
+            data:result
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
 //update the services on lab id
 const updateServicesOnLabId = async(req,res)=>{
     const {labId} = req.params;
@@ -743,14 +771,14 @@ const updateCloudSliceLab = async(req,res)=>{
 //update catalogue details
 const updateCatalogueDetails = async(req,res)=>{
     try {
-        const {catalogueName,catalogueType,labId} = req.body;
-        if(!catalogueName || !catalogueType ||!labId){
+        const {catalogueName,catalogueType,labId,level,category,price} = req.body;
+        if(!catalogueName || !catalogueType ||!labId || !level || !category ){
             return res.status(404).send({
                 success:false,
                 message:"Please provide all the required fields"
             })
         }
-        const result = await cloudSliceAwsService.updateCatalogueDetails(catalogueName,catalogueType,labId);
+        const result = await cloudSliceAwsService.updateCatalogueDetails(catalogueName,catalogueType,labId,level,category,price);
         if(!result || result.length === 0){
             return res.status(400).send({
                 success:false,
@@ -776,14 +804,15 @@ const updateCatalogueDetails = async(req,res)=>{
 const cloudSliceOrgAssignment = async(req,res)=>{
     try {
         
-        const {sliceId,organizationId,userId,startDate,endDate} = req.body;
-        if(!sliceId || !organizationId  || !userId ||!startDate || !endDate){
+        const {sliceId,organizationId,admin_id,userId,startDate,endDate} = req.body;
+        console.log(req.body)
+        if(!sliceId || !organizationId  ||!admin_id || !userId ||!startDate || !endDate){
             return res.status(400).send({
                 success:false,
                 message:"Please provide lab id and organization id"
             })
         }
-        const result = await cloudSliceAwsService.cloudSliceLabOrgAssignment(sliceId,organizationId,userId,startDate,endDate);
+        const result = await cloudSliceAwsService.cloudSliceLabOrgAssignment(sliceId,organizationId,admin_id,userId,startDate,endDate);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -815,14 +844,14 @@ const cloudSliceOrgAssignment = async(req,res)=>{
 //get cloud slice labs assigned to organization
 const getCloudSliceLabAssignedToOrg = async(req,res)=>{
     try {
-        const orgId = req.params.orgId;
-        if(!orgId){
+        const {orgId,admin_id} = req.body;
+        if(!orgId || !admin_id){
             return res.status(400).send({
                 success:false,
-                message:"Please provide organization id"
+                message:"Please provide organization id and admin id"
             })
         }
-        const result = await cloudSliceAwsService.getAllLabsFromOrgAssignment(orgId);
+        const result = await cloudSliceAwsService.getAllLabsFromOrgAssignment(orgId,admin_id);
         if(!result){
             return res.status(404).send({
                 success:success,
@@ -845,6 +874,105 @@ const getCloudSliceLabAssignedToOrg = async(req,res)=>{
     }
 }
 
+//get the user purchased labs
+const getUserPurchasedLabs = async(req,res) =>{
+    try {
+        const {userId} = req.body;
+        if(!userId){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide the user id"
+            })
+        }
+        const result = await cloudSliceAwsService.getUserPurchasedLabs(userId);
+        if(!result || !result.length){
+            return res.status(200).send({
+                success:false,
+                message:"No purchased lab for this user",
+                data:[]
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the labs",
+            data:result
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
+
+
+//get the user purchased labs
+const getUserPurchasedLabOnId = async(req,res) =>{
+    try {
+        const {labId} = req.body;
+        if(!labId ){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide all the required fields "
+            })
+        }
+        const result = await cloudSliceAwsService.getUserPurchasedLabOnId(labId);
+        if(!result || !result.length){
+            return res.status(200).send({
+                success:false,
+                message:"No purchased lab for this user",
+                data:[]
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the labs",
+            data:result
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
+
+//update the purchased lab dates
+const updateDates = async(req,res)=>{
+    try {
+        console.log(req.body)
+        const {labId,userId,duration,status,launched}=req.body;
+        if(!labId || !userId ||!duration||!status){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide all the required fields"
+            })
+        }
+        const update = cloudSliceAwsService.updateDates(labId,userId,duration,status,launched);
+        if(!update){
+            return res.status(404).send({
+                success:false,
+                messsage:"No lab found with this id"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully added dates",
+            data:update
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:true,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
 
 //delete cloud slice lab assigned to organization
 const deleteCloudSliceLabAssignedToOrg = async(req,res)=>{
@@ -954,14 +1082,14 @@ const getUserAssignedCloudSliceLabs = async(req,res)=>{
 //get lab details for organization assignment
 const getAllLabDetailsForOrgAssigned = async(req,res)=>{
     try {
-        const orgId = req.params.orgId;
-        if(!orgId){
+        const {orgId,adminId} = req.body;
+        if(!orgId || !adminId){
             return res.status(400).send({
                 success:false,
                 message:"Please provide the organization id"
             })
         }
-        const result = await cloudSliceAwsService.getAllLabDetailsForOrgAssignment(orgId);
+        const result = await cloudSliceAwsService.getAllLabDetailsForOrgAssignment(orgId,adminId);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -1018,7 +1146,8 @@ const getUserAssignedLabStatus = async(req,res)=>{
 //delete user assigned labs on user id and labid
 const deleteUserAssignedCloudSliceLabs = async(req,res)=>{
     try {
-        const {userId,labId} = req.body;
+        const {userId,labId,purchased} = req.body;
+        console.log(req.body)
         if(!userId){
             return res.status(400).send({
                 success:false,
@@ -1031,7 +1160,7 @@ const deleteUserAssignedCloudSliceLabs = async(req,res)=>{
                 message:"Please provide lab id"
             })
         }
-        const result = await cloudSliceAwsService.deleteCloudSliceLabForUser(labId,userId);
+        const result = await cloudSliceAwsService.deleteCloudSliceLabForUser(labId,userId,purchased);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -1192,6 +1321,7 @@ const updateCloudSliceLabStatus = async(req,res)=>{
 const updateCloudSliceLabStatusOfOrg = async(req,res)=>{
     try {
         const data = req.body;
+        console.log(data)
         if(!data){
             return res.status(400).send({
                 success:false,
@@ -1226,11 +1356,11 @@ const updateCloudSliceLabStatusOfOrg = async(req,res)=>{
 //update status of cloudslicelab of user
 const updateCloudSliceLabOfUser = async(req,res)=>{
     try {
-        const {status,launched,labId,userId} = req.body;
+        const {status,launched,labId,userId,purchased} = req.body;
         if(!status || !labId || !userId){
             throw new Error("Please Provide the details")
         }
-        const response = await cloudSliceAwsService.updateCloudSliceLabOfUser(status,launched,labId,userId);
+        const response = await cloudSliceAwsService.updateCloudSliceLabOfUser(status,launched,labId,userId,purchased);
         if(!response){
             return res.status(404).send({
                 success:false,
@@ -1284,6 +1414,7 @@ const updateCloudSliceLabRunningStateOfUser = async(req,res)=>{
 const updateUserCloudSliceLabTimes = async(req,res)=>{
     try {
         const {startDate,endDate,labId,identifier,type} = req.body;
+        console.log(req.body)
         const result = await cloudSliceAwsService.updateUserCloudSliceLabTimes(startDate,endDate,labId,identifier,type);
         if(!result){
             return res.status(404).send(
@@ -1311,7 +1442,14 @@ const updateUserCloudSliceLabTimes = async(req,res)=>{
 //get all cloudslice labs
 const getAllCloudSliceLabs = async(req,res)=>{
     try {
-        const result = await cloudSliceAwsService.getAllCloudSliceLabs();
+        const {userId} = req.body;
+        if(!userId){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide user id"
+            })
+        }
+        const result = await cloudSliceAwsService.getAllCloudSliceLabs(userId);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -1407,5 +1545,9 @@ module.exports = {
     updateCloudSliceLabRunningStateOfUser,
     addLabStatusOfUser,
     getUserLabExerciseStatus,
-    updateCatalogueDetails
+    updateCatalogueDetails,
+    getUserPurchasedLabs,
+    updateDates,
+    getCloudSliceDetailsForCatalogue,
+    getUserPurchasedLabOnId
 }

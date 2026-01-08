@@ -28,7 +28,8 @@ const createTables = async()=>{
                 status VARCHAR(50) DEFAULT 'available',
                 rating FLOAT DEFAULT 0.0,
                 total_enrollments INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP),
+                `
               
         );
         //single-vm datacenter table
@@ -45,6 +46,105 @@ const createTables = async()=>{
           labguide text[],
           userguide text[]
       )`)
+      //template id information
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS templateinformation (
+          labid UUID REFERENCES singlevmproxmox_lab(labid) ON DELETE CASCADE,
+          templateid INTEGER ,
+          created_at TIMESTAMP DEFAULT NOW(),
+          processing boolean default false
+        );
+        `)
+      //singlevm proxmox org table
+      await pool.query(
+        `
+        CREATE TABLE IF NOT EXISTS singlevmproxmoxorgassignment (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        labid UUID REFERENCES singlevmproxmox_lab(labid) ON DELETE CASCADE,
+        orgid UUID,
+        assigned_at TIMESTAMP DEFAULT NOW(),
+        status TEXT DEFAULT 'available',
+        startdate TIMESTAMP,
+        enddate TIMESTAMP,
+        user_id UUID,
+        islaunched BOOLEAN DEFAULT FALSE,
+        isrunning BOOLEAN DEFAULT FALSE,
+        isprocessing BOOLEAN DEFAULT FALSE,
+        vm_id INTEGER,
+        vmname TEXT,
+        assigned_by uuid
+      );
+      `
+      )
+
+      //single vm proxmox user assignment
+      await pool.query(
+        `
+        create table if not exists singlevmproxmoxuserassignment(
+        id uuid primary key,
+        labid uuid,
+        user_id uuid,
+        assigned_by uuid,
+        assigned_at timestamp default now(),
+        startdate timestamp,
+        enddate timestamp,
+        islaunched boolean default false,
+        isrunning boolean default false,
+        isprocessing boolean default false,
+        vmid integer,
+        vmname text
+        )
+        `
+      )
+      //create batch table
+      await pool.query(`
+         create table if not exists batches(
+          id uuid primary key default uuid_generate_v4(),
+          name text,
+          description text,
+          created_at timestamp default NOW(),
+          created_by uuid,
+          user_count integer,
+          lab_count integer,
+          trainer_count integer,
+          startdate timestamp,
+          enddate timestamp
+          )
+        `)
+
+        //create batch users
+        await pool.query(`
+         create table if not exists batch_users(
+          id uuid primary key default uuid_generate_v4(),
+          labs_started integer,
+          labs_completed integer,
+          total_labs integer,
+          batch_id uuid,
+          user_id uuid
+          ) 
+          `)
+        
+        //create batch labs
+        await pool.query(`
+        CREATE TABLE IF NOT EXISTS batchlabs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        lab_id UUID NOT NULL,
+        lab_name TEXT NOT NULL,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        users_started INTEGER DEFAULT 0,
+        users_completed INTEGER DEFAULT 0,
+        total_users INTEGER DEFAULT 0,
+        remaining_days INTEGER DEFAULT 0,
+        trainer_id UUID,
+        trainer_name TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        batch_id uuid,
+        assigned_by uuid
+      );
+ `)
+
       //lab_status  logs table
         await pool.query(`
                     CREATE TABLE IF NOT EXISTS lab_status_logs(
@@ -69,6 +169,33 @@ const createTables = async()=>{
             expires_at TIMESTAMP NOT NULL
           );
         `);
+
+        //create the table to store the organization cloud credentials
+        await pool.query(`
+         CREATE TABLE IF NOT EXISTS org_cloud_credentials (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+              provider TEXT NOT NULL,
+              name TEXT NOT NULL,
+              credentials JSONB NOT NULL,
+              created_by UUID,
+              created_at TIMESTAMP DEFAULT NOW()
+          );
+
+          `)
+
+           //create the table to store the organization cloud credentials
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS global_cloud_credentials (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              provider TEXT NOT NULL,
+              name TEXT NOT NULL,
+              credentials JSONB NOT NULL,
+              created_by UUID,
+              created_at TIMESTAMP DEFAULT NOW()
+          );
+
+          `)
 
         //create a table for cart_items
         await pool.query(`
@@ -211,6 +338,29 @@ const createTables = async()=>{
         isstarted boolean DEFAULT false
         )`
       );
+
+      //single vm proxmox purchased labs
+      await pool.query(
+        `
+        CREATE TABLE IF NOT EXISTS singlevmproxmox_purchased_labs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        labid UUID,
+        assigned_at TIMESTAMP DEFAULT NOW(),
+        status TEXT DEFAULT 'not-started',
+        startdate TIMESTAMP,
+        enddate TIMESTAMP,
+        duration INTEGER,
+        payment_id UUID,
+        user_id UUID,
+        vmid INTEGER,
+        vmname TEXT,
+        islaunched boolean default false,
+        isrunning boolean default false
+    );
+
+        `
+      
+      )
 
         console.log(`Successfully created tables`);
 
