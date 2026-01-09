@@ -65,6 +65,30 @@ const createLab = async (req, res) => {
   }
 };
 
+const getLabsOfLabadmins = async(req,res)=>{
+    try {
+        const {userIds} = req.body;
+        console.log(req.body)
+        if(!userIds.length){
+            return res.status(400).send({
+                success:false,
+                message:"Please Provide the user Ids"
+            })
+        }
+        const result = await labService.getSingleVMAwsLabsOnOrgId(userIds);
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the labs",
+            data:result
+        })
+    } catch (error) {
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
 //create single vm datacenter lab
 const createSingleVmDatacenterLab = async (req,res)=>{
     try {
@@ -1774,5 +1798,6 @@ module.exports = {
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
     getAllOrganizationAssignedLabs,
-    getAllLabs
+    getAllLabs,
+    getLabsOfLabadmins
 }

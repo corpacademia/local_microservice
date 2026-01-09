@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { createLab,
     getAllLab,
+    getLabsOfLabadmins,
     getLabOnId,
     assignLab,
     getAssignLabOnId,
@@ -115,6 +116,7 @@ router.get('/getCatalogues',getAllLab);
 router.post('/getLabOnId',getLabOnId); 
 router.post('/assignlab',assignLab);
 router.post('/getAssignedLabs',getAssignLabOnId);
+router.post('/getLabadminsLabs',getLabsOfLabadmins)
 router.post('/getInstances',getInstanceOnParameters);
 router.post('/getInstanceDetails',getInstanceDetailsForPricing);
 router.post('/getLabsConfigured',getLabsConfigured);

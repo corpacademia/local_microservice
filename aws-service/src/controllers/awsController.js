@@ -223,7 +223,7 @@ const deleteSuperVm = async (req, res) => {
 const handleLaunchSoftwareOrStop = async (req, res) => {
   try {
       const { os_name, instance_id, hostname, password } = req.body;
-
+      console.log(req.body)
       const response = await terraformService.handleLaunchSoftwareOrStopService(os_name, instance_id, hostname, password);
      
       return res.status(200).send({

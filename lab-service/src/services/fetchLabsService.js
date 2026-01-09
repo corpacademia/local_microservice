@@ -97,7 +97,6 @@ const rows = allRows.map(row => {
     source,
   };
 });
-    console.log(rows)
     // });
     return res.status(200).send({
       success: true,

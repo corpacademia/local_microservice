@@ -29,12 +29,13 @@ const getUserData = async(userId,sessionToken)=>{
 const assignCloudsliceLab = async(lab, user, assign_admin_id, start_date, end_date,sessionToken)=>{
     const existsLab =  await pool.query(batchQueries.CHECK_USER_ASSIGNED_LAB,[lab,user]);
             const userData = await getUserData(user,sessionToken)
-            if(existsLab.rows.length){
-                return res.status(404).send({
-                    success:false,
-                    message:`Already lab assigned to ${userData.name}`
-                })
-            }
+            // if(existsLab.rows.length){
+                // return res.status(404).send({
+                //     success:false,
+                //     message:`Already lab assigned to ${userData.name}`
+                // })
+                
+            // }
             const result = await pool.query(
               batchQueries.INSERT_CLOUDSLICE_USER_ASSIGNMENT,
               [lab, user, assign_admin_id, start_date, end_date]
@@ -183,10 +184,11 @@ const addUsersToBatch = async(req,res)=>{
                      const checkAlreadyAssigned = await pool.query(proxmoxQueries.CHECK_ALREADY_ASSIGNED, [userId, labId]);
              
              if (checkAlreadyAssigned.rows.length > 0) {
-                return res.status(404).send({
-                    success:false,
-                    message:`Lab already assigned to ${userDetails.name}`
-                })
+                // return res.status(404).send({
+                //     success:false,
+                //     message:`Lab already assigned to ${userDetails.name}`
+                // })
+                continue;
              }
             const vmName = `vm-${userDetails.name.replace(' ','-')}`
              // Insert lab assignment into the database
@@ -203,7 +205,8 @@ const addUsersToBatch = async(req,res)=>{
                 else if(labDetails.type === 'singlevm-aws'){
                      const checkAlreadyAssigned = await pool.query(labQueries.CHECK_ALREADY_ASSIGNED, [userId, labId]);
                        if (checkAlreadyAssigned.rows.length > 0) {
-                           throw new Error(`Lab already assigned to ${userData.name}`)
+                        //    throw new Error(`Lab already assigned to ${userData.name}`)
+                        continue;
                        }
                        // Insert lab assignment into the database
                        const result = await pool.query(labQueries.ASSIGN_LAB, [
@@ -222,10 +225,11 @@ const addUsersToBatch = async(req,res)=>{
         const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USERASSIGNED_SINGLEVM_DATACENTER_LAB, [labId,userId]);
         const userData = await getUserData(userId, sessionToken);
         if (checkAlreadyAssigned.rows.length) {
-          return res.status(404).send({
-                success:false,
-                message:`Lab already assigned to ${userData.name}`
-            })
+        //   return res.status(404).send({
+        //         success:false,
+        //         message:`Lab already assigned to ${userData.name}`
+        //     })
+        continue;
         }
 
         const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [userId, labId]);
@@ -255,10 +259,11 @@ const addUsersToBatch = async(req,res)=>{
         const userdata = await getUserData(userId,sessionToken);
               const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USER_LABS_VMCLUSTERDATACENTER,[labId,userId]);
               if(checkAlreadyAssigned.rows.length){
-                return res.status(404).send({
-                    success:false,
-                    message:`Lab Already assigned to ${userdata.name}`
-                })
+                // return res.status(404).send({
+                //     success:false,
+                //     message:`Lab Already assigned to ${userdata.name}`
+                // })
+                continue;
               }
               let groupCredsIdToUser;
                 groupCredsIdToUser = await pool.query(
@@ -408,10 +413,11 @@ const addLabsToBatch = async (req, res) => {
       if (type === 'singlevm-proxmox') {
         const checkAlreadyAssigned = await pool.query(proxmoxQueries.CHECK_ALREADY_ASSIGNED, [user.id, lab_id]);
         if (checkAlreadyAssigned.rows.length > 0) {
-            return res.status(404).send({
-                success:false,
-                message:`Lab already assigned to ${user.name}`
-            })
+            // return res.status(404).send({
+            //     success:false,
+            //     message:`Lab already assigned to ${user.name}`
+            // })
+            continue;
         }
         const vmName = `vm-${user.name.replace(/\s+/g, '-')}`;
         await pool.query(proxmoxQueries.INSERT_SINGLEVM_USER_ASSIGNMENT, [
@@ -427,7 +433,8 @@ const addLabsToBatch = async (req, res) => {
       else if(type === 'singlevm-aws'){
            const checkAlreadyAssigned = await pool.query(labQueries.CHECK_ALREADY_ASSIGNED, [user.user_id, lab_id]);
                        if (checkAlreadyAssigned.rows.length > 0) {
-                           throw new Error(`Lab already assigned to ${userData.name}`)
+                        //    throw new Error(`Lab already assigned to ${userData.name}`)
+                        continue;
                        }
                        // Insert lab assignment into the database
                        const result = await pool.query(labQueries.ASSIGN_LAB, [
@@ -444,10 +451,11 @@ const addLabsToBatch = async (req, res) => {
         const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USERASSIGNED_SINGLEVM_DATACENTER_LAB, [lab_id, user.user_id]);
         const userData = await getUserData(user.user_id, sessionToken);
         if (checkAlreadyAssigned.rows.length) {
-          return res.status(404).send({
-                success:false,
-                message:`Lab already assigned to ${user.name}`
-            })
+        //   return res.status(404).send({
+        //         success:false,
+        //         message:`Lab already assigned to ${user.name}`
+        //     })
+        continue;
         }
 
         const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [user.user_id, lab_id,org_id]);
@@ -479,10 +487,11 @@ const addLabsToBatch = async (req, res) => {
         const userdata = await getUserData(user.user_id,sessionToken);
               const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USER_LABS_VMCLUSTERDATACENTER,[lab_id,user.user_id]);
               if(checkAlreadyAssigned.rows.length){
-                return res.status(404).send({
-                    success:false,
-                    message:`Lab Already assigned to ${userdata.name}`
-                })
+                // return res.status(404).send({
+                //     success:false,
+                //     message:`Lab Already assigned to ${userdata.name}`
+                // })
+                continue;
               }
               let groupCredsIdToUser;
                 groupCredsIdToUser = await pool.query(
@@ -727,7 +736,6 @@ const updateBatchLab = async (req, res) => {
 const deleteUserAndItsLabs = async(req,res)=>{
     try {
         const {labIds,userId,batchId} = req.body;
-        console.log(req.body);
         if( !userId || !batchId){
             return res.status(400).send({
                 success:false,
@@ -743,6 +751,7 @@ const deleteUserAndItsLabs = async(req,res)=>{
             })
         }
         for (const labId of labIds){
+              await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,labId])
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, userId]);
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, userId]);
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, userId]);
@@ -787,6 +796,7 @@ const deleteBatch = async(req,res)=>{
          if(getBatchUsers.rows.length){
       for(const lab of getBatchLabs.rows){
          for (const user of getBatchUsers.rows){
+            await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,lab.lab_id])
             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [lab.lab_id, user.user_id]);
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [lab.lab_id, user.user_id]);
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [lab.lab_id, user.user_id]);
@@ -836,6 +846,7 @@ const deleteLabFromBatch = async(req,res)=>{
                 message:"Please provide the required fields"
             })
         }
+        await pool.query("BEGIN")
         const deleteLab = await pool.query(batchQueries.DELETE_LAB_FROM_BATCH,[labId,batchId]);
         if(!deleteLab.rows.length){
             return res.status(404).send({
@@ -851,6 +862,7 @@ const deleteLabFromBatch = async(req,res)=>{
             })
         }
         for (const user of getBatchUsers.rows){
+              await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,labId])
             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, user.user_id]);
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, user.user_id]);
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, user.user_id]);
@@ -861,6 +873,7 @@ const deleteLabFromBatch = async(req,res)=>{
         }
         await pool.query(batchQueries.UPDATE_BATCHLAB_COUNT,[-1,batchId]);
         await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB,[-1,batchId]);
+        await pool.query("COMMIT")
         return res.status(200).send({
             success:true,
             message:"Succesfully deleted a lab",
@@ -868,6 +881,7 @@ const deleteLabFromBatch = async(req,res)=>{
         })
     } catch (error) {
         console.log(error);
+        await pool.query('ROLLBACK')
         return res.status(500).send({
             success:false,
             message:"Internal server error",

@@ -600,7 +600,20 @@ UPDATE_CLOUDSLICE_CATALOGUE_DETAILS: `
     INNER JOIN instances ic 
     ON cl.lab_id = ic.lab_id
     where cl.user_id = $1
-  `,
+   `,
+   GET_CONFIGURED_LABS_SUPERADMIN:`
+    SELECT cl.* 
+    FROM createlab cl
+    INNER JOIN instances ic 
+    ON cl.lab_id = ic.lab_id
+   `,
+   GET_CONFIGURED_LABS_ORG:`
+    SELECT cl.* 
+    FROM createlab cl
+    INNER JOIN instances ic 
+    ON cl.lab_id = ic.lab_id
+    WHERE cl.user_id = ANY($1) 
+   `,
   GET_LAB_CATALOGUES: `
   SELECT * 
   FROM createlab l 

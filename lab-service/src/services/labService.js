@@ -999,10 +999,20 @@ const checkLabBatchAssessment = async (admin_id, org_id) => {
 };
 
 const getLabsConfigured = async (admin) => {
-    const labs = await pool.query(labQueries.GET_CONFIGURED_LABS, [admin]);
-    // console.log("Labs Configured:", labs.rows);
+    let labs;
+    if(admin === 'superadmin'){
+        labs = await pool.query(labQueries.GET_CONFIGURED_LABS_SUPERADMIN)
+    }
+    else{
+    labs = await pool.query(labQueries.GET_CONFIGURED_LABS, [admin]);
+    }// console.log("Labs Configured:", labs.rows);
     return labs.rows;
   };
+
+  const getSingleVMAwsLabsOnOrgId = async(userIds)=>{
+      const labs = await pool.query(labQueries.GET_CONFIGURED_LABS_ORG,[userIds]);
+      return labs.rows;
+  }
 
 // Get Lab Catalogues
 const getLabCatalogues = async () => {
@@ -1170,6 +1180,7 @@ const getCloudSliceOrgLabs = async (orgId) => {
 
 module.exports = {
     createLab,
+    getSingleVMAwsLabsOnOrgId,
     getAllLab,
     getLabOnId,
     assignLab,

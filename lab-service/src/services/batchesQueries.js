@@ -1,3 +1,5 @@
+const { DELETE_CLOUD_ASSIGNED_INSTANCE } = require("../../../aws-service/src/services/awsQueries");
+
 module.exports ={
     CREATE_BATCH :`INSERT INTO batches(name,description,created_by,startdate,enddate) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
     CREATE_BATCH_USER:`INSERT INTO batch_users(batch_id,user_id) VALUES ($1,$2) RETURNING *`,
@@ -335,7 +337,7 @@ RETURNING d.*;
     DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS: `
     DELETE FROM labassignments WHERE lab_id = $1 AND user_id = $2 RETURNING *;
     `,
-
+    DELETE_CLOUD_ASSIGNED_INSTANCE:`DELETE FROM cloudassignedinstance WHERE user_id=$1 AND lab_id=$2`,
     DELETE_USERLABS_FROM_BATCH_CLOUDSLICE: `
     DELETE FROM cloudsliceuserassignment WHERE labid = $1 AND user_id = $2 RETURNING *;
     `,
