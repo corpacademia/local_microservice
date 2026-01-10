@@ -346,7 +346,7 @@ const deleteLabService = async (labId, instanceId, amiId, userId,purchased) => {
       console.error("ID is required");
     }
     // Execute Python script to delete VM from the cloud
-    const scriptPath = "../terraformScripts/deleteInstance.py";
+    const scriptPath = "../terraformScripts/deleteInstance.py";getCloudSlices
     await executePythonScript(scriptPath, [instanceId, amiId]);
 
     // Execute database queries

@@ -60,14 +60,21 @@ const getAllUsers = async () => {
      const labData = getLabDetails.rows[0];
      const getInstanceDetails = await pool.query(queries.GET_INSTANCE_DETAILS,[labId]);
      const instanceDetails = getInstanceDetails.rows;
+     const getLabInstance = await pool.query(queries.GET_LAB_INSTANCE_DETAILS,[labId]);
+     const labInstanceDetails = getLabInstance.rows[0] || null
     /* --------------------------------------------------
        3️⃣ Merge & dedupe
     -------------------------------------------------- */
-    const allRows = [
-    ...created,
-    ...orgAssigned,
-    ...userAssigned,
-    ];
+    const mergedCreated = created.map(row => ({
+        ...row,
+        ...(labInstanceDetails || {}),
+      }));
+   const allRows = [
+   ...mergedCreated,
+  ...(Array.isArray(orgAssigned) ? orgAssigned : []),
+  ...(Array.isArray(userAssigned) ? userAssigned : []),
+];
+ console.log(allRows)
 const rows = allRows.map(row => {
   let userId = null;
   let source = null;
@@ -161,9 +168,9 @@ const getOrgCloudsliceLabs = async (req, res) => {
        3️⃣ Merge & dedupe
     -------------------------------------------------- */
     const allRows = [
-  ...created,
-  ...orgAssigned,
-  ...userAssigned,
+  ...created || [],
+  ...orgAssigned || [],
+  ...userAssigned || [],
 ];
 const rows = allRows.map(row => {
   let userId = null;
@@ -261,9 +268,9 @@ const getOrgSingleVMDatacenterLabs = async (req, res) => {
        3️⃣ Merge & dedupe
     -------------------------------------------------- */
     const allRows = [
-    ...created,
-    ...orgAssigned,
-    ...userAssigned,
+    ...created || [] ,
+    ...orgAssigned || [],
+    ...userAssigned || [],
     ];
 const rows = allRows.map(row => {
   let userId = null;
@@ -365,9 +372,9 @@ const getOrgVMClusterDatacenterLabs = async (req, res) => {
        3 Merge & dedupe
     -------------------------------------------------- */
     let allRows = [
-        ...created,
-        ...orgAssigned,
-        ...userAssigned,
+        ...created ||[],
+        ...orgAssigned||[],
+        ...userAssigned||[],
     ];
    const rows = allRows.map(row => {
   let userId = null;
@@ -470,9 +477,9 @@ const getOrgProxmoxLabs = async (req, res) => {
        3️⃣ Merge & dedupe
     -------------------------------------------------- */
     const allRows = [
-  ...created,
-  ...orgAssigned,
-  ...userAssigned,
+  ...created ||[],
+  ...orgAssigned||[],
+  ...userAssigned||[],
     ];
 const rows = allRows.map(row => {
   let userId = null;

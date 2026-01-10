@@ -25,7 +25,8 @@ module.exports = {
     GET_USER_PURCHASED_LABS:`SELECT * FROM cloudslice_purchased_labs where user_id=$1`,
     GET_USER_PURCHASED_LAB_ON_ID:`SELECT * FROM cloudslice_purchased_labs where labid=$1`,
 
-    GET_ALL_LABS_ON_CREATED_USER:`SELECT * FROM cloudslicelab where createdby = $1`,
+    GET_ALL_LABS_ON_CREATED_USER:`SELECT * FROM cloudslicelab where createdby = ANY($1)`,
+     GET_ALL_LABS_ON_SUPERADMIN_USER:`SELECT * FROM cloudslicelab`,
     GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT:`SELECT * FROM cloudsliceorgassignment where orgid = $1 and admin_id = $2`,
      GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENTS:`SELECT * FROM cloudsliceorgassignment where orgid = $1`,
     CHECK_LAB_EXISTS:`SELECT * FROM cloudsliceorgassignment where orgid = $1 AND labid = $2 AND admin_id = $3`,

@@ -373,3 +373,29 @@ output "instance_id_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260109192126" {
 output "public_ip_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260109192126" {
   value = aws_instance.app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260109192126.public_ip
 }
+
+
+
+resource "aws_instance" "app_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "Khan_c9c3b4dd-a3bd-4472-83ba-df5c35130422"
+  }
+}
+
+output "instance_id_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555" {
+  value = aws_instance.app_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555.id
+}
+
+output "public_ip_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555" {
+  value = aws_instance.app_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555.public_ip
+}

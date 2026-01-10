@@ -191,16 +191,33 @@ const createCloudSliceLabWithModules = async (labData,filesArray) => {
     }
 }
 
-const getCloudSliceLabsByCreatedUser = async(userId)=>{
-    try {
-        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_ON_CREATED_USER,[userId]);
-      
-        return result.rows;
-    } catch (error) {
-        console.log(error);
-        throw new Error('Error in getCloudSliceLabs function', error);
+const getCloudSliceLabsByCreatedUser = async (userIds) => {
+  try {
+    let result;
+
+    // SUPERADMIN → all labs
+    if (userIds === 'superadmin') {
+      result = await pool.query(
+        cloudSliceAwsQueries.GET_ALL_LABS_ON_SUPERADMIN_USER
+      );
     }
-}
+
+    // ORGSUPERADMIN / MULTI-LABADMINS
+    else {
+      const ids = Array.isArray(userIds) ? userIds : [userIds];
+
+      result = await pool.query(
+        cloudSliceAwsQueries.GET_ALL_LABS_ON_CREATED_USER,
+        [ids]
+      );
+    }
+
+    return result.rows;
+  } catch (error) {
+    console.error(error);
+    throw new Error('Error in getCloudSliceLabsByCreatedUser');
+  }
+};
 
 //fetch cloudslice lab by id
 const getCloudSliceLabById = async(labId)=>{

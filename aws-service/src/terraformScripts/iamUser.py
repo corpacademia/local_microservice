@@ -168,7 +168,7 @@ def main():
     user_id = None
     purchased = False
 
-    if role == "orgsuperadmin" and len(sys.argv) >= 6:
+    if role == "orgsuperadmin" or role == "labadmin" and len(sys.argv) >= 6:
         orgid = sys.argv[5]
 
     if role == "user":
