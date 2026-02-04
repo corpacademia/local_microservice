@@ -340,13 +340,14 @@ const goldenToInstanceForNewCatalogueLogic = async (instanceType, amiId, storage
   }
 };
 
+
 const deleteLabService = async (labId, instanceId, amiId, userId,purchased) => {
   try {
-    if (!labId || !instanceId || !amiId || !userId) {
+    if (!labId  || !userId) {
       console.error("ID is required");
     }
     // Execute Python script to delete VM from the cloud
-    const scriptPath = "../terraformScripts/deleteInstance.py";getCloudSlices
+    const scriptPath = "../terraformScripts/deleteInstance.py";
     await executePythonScript(scriptPath, [instanceId, amiId]);
 
     // Execute database queries
@@ -365,7 +366,21 @@ const deleteLabService = async (labId, instanceId, amiId, userId,purchased) => {
     throw error;
   }
 };
+const deleteBatchLabService = async (labId, instanceId, amiId, userId) => {
+  try {
+    if (!labId  || !userId) {
+      console.error("ID is required");
+    }
+    // Execute Python script to delete VM from the cloud
+    const scriptPath = "../terraformScripts/deleteInstance.py";
+    await executePythonScript(scriptPath, [instanceId, amiId]);
 
+    return { success: true, message: "Lab deleted successfully" };
+  } catch (error) {
+    console.log(error)
+    throw error;
+  }
+}
 const deleteSuperLabService = async (labId, instanceId, amiId) => {
   try {
     if (!labId) {
@@ -597,13 +612,13 @@ const updateAssessmentStorageService = async (instanceId, newVolumeSize, labId) 
   }
 };
 
-const createCloudAssignedInstance = async (name, ami_id, user_id, lab_id, instance_type, start_date, end_date) => {
+const createCloudAssignedInstance = async (name, ami_id, user_id, lab_id, instance_type, start_date, end_date,batch,batch_id) => {
   if (!name || !ami_id || !user_id || !lab_id || !instance_type || !start_date || !end_date) {
       throw new Error("Missing required parameters");
   }
 
   const scriptPath = "../terraformScripts/launchInstance.py";
-  const args = [name, ami_id, user_id, lab_id, instance_type, start_date, end_date];
+  const args = [name, ami_id, user_id, lab_id, instance_type, start_date, end_date,batch,batch_id];
 
   return await executePythonScript(scriptPath, args);
 };
@@ -817,5 +832,6 @@ module.exports = {
   editAwsServices,
   deletePermissions,
   addAwsServices,
-  deleteIamAccount
+  deleteIamAccount,
+  deleteBatchLabService
 };

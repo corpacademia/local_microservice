@@ -558,8 +558,8 @@ UPDATE_CLOUDSLICE_CATALOGUE_DETAILS: `
     GET_CONFIG_DETAILS_RANDOM_USER: `SELECT config_details FROM lab_batch WHERE lab_id=$1 `,
     CHECK_ALREADY_ASSIGNED: `SELECT * FROM labassignments WHERE user_id=$1 AND lab_id=$2`,
     ASSIGN_LAB: `
-        INSERT INTO labassignments (lab_id, user_id, start_date, completion_date, assigned_admin_id) 
-        VALUES ($1, $2, $3, $4, $5) 
+        INSERT INTO labassignments (lab_id, user_id, start_date, completion_date, assigned_admin_id,assignment_type,batch_id) 
+        VALUES ($1, $2, $3, $4, $5,$6,$7) 
         RETURNING *`,
         GET_ASSIGNED_LABS: `SELECT * FROM labassignments WHERE user_id=$1`,
         GET_ASSIGNED_PURCHASED_LABS: `SELECT * FROM singlevm_aws_purchased_labs WHERE user_id=$1`,
@@ -614,13 +614,14 @@ UPDATE_CLOUDSLICE_CATALOGUE_DETAILS: `
     ON cl.lab_id = ic.lab_id
     WHERE cl.user_id = ANY($1) 
    `,
-  GET_LAB_CATALOGUES: `
-  SELECT * 
-  FROM createlab l 
-  INNER JOIN lab_configurations lc 
-  ON l.lab_id = lc.lab_id 
-  WHERE lc.config_details->>'catalogueType' = 'public'
-`,
+  
+    GET_LAB_CATALOGUES: `
+    SELECT * 
+    FROM createlab l 
+    INNER JOIN lab_configurations lc 
+    ON l.lab_id = lc.lab_id 
+    WHERE lc.config_details->>'catalogueType' = 'public'
+  `,
 
 CHECK_LAB_INSTANCE_STARTED: "SELECT isstarted FROM instances WHERE instance_id = $1",
 CHECK_USER_INSTANCE_STARTED: "SELECT isstarted FROM cloudassignedinstance WHERE instance_id = $1",

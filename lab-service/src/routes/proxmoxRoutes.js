@@ -37,7 +37,9 @@ const {
     getTemplatesByNode,
     getIpOfVm,
     createUserVm,
-    stopVM
+    stopVM,
+    deleteVMOFProxmox,
+    getLabAdminsLab
 } = require('../services/proxmoxService');
 
 
@@ -64,7 +66,7 @@ router.post('/createSingleVmProxmoxLab',createSingleVmProxmoxConfig);
 router.post('/getProxmoxLabsOnAdminId',getSingleVmProxmoxLab);
 router.post('/checkVMStatus',checkVMStatus);
 router.post('/launchVM',createVM);
-router.post('/launchUserVm',createUserVm)
+router.post('/launchUserVm',createUserVm);
 router.post('/updateProxmoxLab',editProxmoxVm);
 router.post('/deleteProxmoxLab',deleteVmInProxmox);
 router.post('/createTemplate',createTemplateInProxmox);
@@ -84,5 +86,7 @@ router.post('/startVM',startVM);
 router.post('/stopVM',stopVM)
 router.post('/templates',getTemplatesByNode)
 router.post('/getIpOfVm',getIpOfVm);
+router.post('/deleteVMOFProxmox',deleteVMOFProxmox);
+router.post('/getProxmoxLabAdminsLab',getLabAdminsLab)
 
 module.exports = router;

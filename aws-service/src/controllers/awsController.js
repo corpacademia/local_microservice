@@ -147,7 +147,6 @@ const vmToGoldenImage = async (req, res) => {
               message: "Missing required parameters: instance_id, lab_id.",
           });
       }
-
       const result = await terraformService.executeVmToGoldenImage(instance_id, lab_id);
 
       return res.status(200).send({
@@ -195,6 +194,24 @@ const deleteVm = async (req, res) => {
     const response = await terraformService.deleteLabService(id, instance_id, ami_id, user_id,purchased);
 
     return res.status(200).send(response);
+  } catch (error) {
+    return res.status(500).send({
+      success: false,
+      message: "Error deleting lab from the database",
+      error: error.message,
+    });
+  }
+};
+
+const deleteBatchLabService = async (req, res) => {
+  try {
+    const {labId, instanceId, amiId, userId } = req.body;
+
+    const response = await terraformService.deleteBatchLabService(labId, instanceId, amiId, userId);
+
+    return res.status(200).send({
+      success:true,
+      response});
   } catch (error) {
     return res.status(500).send({
       success: false,
@@ -328,8 +345,8 @@ const createCloudAssignedInstance = async (req, res) => {
   try {
       console.log("Launching instance")
 
-      const { name, ami_id, user_id, lab_id, instance_type, start_date, end_date } = req.body;
-      const result = await terraformService.createCloudAssignedInstance(name, ami_id, user_id, lab_id, instance_type, start_date, end_date);
+      const { name, ami_id, user_id, lab_id, instance_type, start_date, end_date,batch=null,batch_id=null } = req.body;
+      const result = await terraformService.createCloudAssignedInstance(name, ami_id, user_id, lab_id, instance_type, start_date, end_date,batch,batch_id);
 
       return res.status(200).json({
           success: true,
@@ -738,5 +755,6 @@ module.exports = {
   editAwsServices,
   deleteAwsServices,
   addAwsServices,
-  deleteIamAccount
+  deleteIamAccount,
+  deleteBatchLabService
 };

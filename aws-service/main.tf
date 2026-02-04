@@ -399,3 +399,367 @@ output "instance_id_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555" {
 output "public_ip_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555" {
   value = aws_instance.app_Khan_c9c3b4dd_a3bd_4472_83ba_df5c35130422_20260110090555.public_ip
 }
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113185739" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113185739" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113185739.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113185739" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113185739.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190531" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190531" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190531.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190531" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190531.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190958" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190958" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190958.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190958" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113190958.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113191708" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113191708" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113191708.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113191708" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260113191708.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114054035" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114054035" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114054035.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114054035" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114054035.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114111617" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114111617" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114111617.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114111617" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114111617.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114125752" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114125752" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114125752.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114125752" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114125752.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114181758" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114181758" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114181758.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114181758" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114181758.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114182956" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114182956" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114182956.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114182956" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260114182956.public_ip
+}
+
+
+
+resource "aws_instance" "app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260114185545" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "user4_0c8fa041-f9a9-40bc-9707-cd557e57f82e"
+  }
+}
+
+output "instance_id_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260114185545" {
+  value = aws_instance.app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260114185545.id
+}
+
+output "public_ip_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260114185545" {
+  value = aws_instance.app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260114185545.public_ip
+}
+
+
+
+resource "aws_instance" "app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260115073732" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "user4_0c8fa041-f9a9-40bc-9707-cd557e57f82e"
+  }
+}
+
+output "instance_id_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260115073732" {
+  value = aws_instance.app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260115073732.id
+}
+
+output "public_ip_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260115073732" {
+  value = aws_instance.app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260115073732.public_ip
+}
+
+
+
+resource "aws_instance" "app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260121071129" {
+  ami           = "ami-09ddeb14ac8b4a43a"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "user4_0c8fa041-f9a9-40bc-9707-cd557e57f82e"
+  }
+}
+
+output "instance_id_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260121071129" {
+  value = aws_instance.app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260121071129.id
+}
+
+output "public_ip_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260121071129" {
+  value = aws_instance.app_user4_0c8fa041_f9a9_40bc_9707_cd557e57f82e_20260121071129.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260127132638" {
+  ami           = "ami-056098c79bd76d53f"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260127132638" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260127132638.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260127132638" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260127132638.public_ip
+}
+
+
+
+resource "aws_instance" "app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260128073817" {
+  ami           = "ami-056098c79bd76d53f"
+  instance_type = "t3.small"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo amazon-linux-extras enable epel
+              sudo yum install -y httpd
+              EOF
+
+  tags = {
+    Name = "A1_34c17183-06ed-46d0-b1f8-49caef71ed1e"
+  }
+}
+
+output "instance_id_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260128073817" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260128073817.id
+}
+
+output "public_ip_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260128073817" {
+  value = aws_instance.app_A1_34c17183_06ed_46d0_b1f8_49caef71ed1e_20260128073817.public_ip
+}

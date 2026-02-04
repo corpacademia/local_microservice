@@ -30,7 +30,8 @@ const {
     editAwsServices,
     deleteAwsServices,
     addAwsServices,
-    deleteIamAccount
+    deleteIamAccount,
+    deleteBatchLabService
 } = require('../controllers/awsController');
 const { awsConfigure } = require('../../../lab-service/src/controllers/labController');
 
@@ -43,6 +44,7 @@ router.post('/createGoldenImage',vmToGoldenImage);
 router.post('/goldenToInstance',goldenToInstance);
 router.post('/createNewInstance',goldenToInstanceForNewCatalogue);
 router.post('/deletevm',deleteVm);
+router.post('/deleteBatchLabService',deleteBatchLabService)
 router.post('/deletesupervm',deleteSuperVm);
 router.post('/runSoftwareOrStop',handleLaunchSoftwareOrStop);
 router.post('/decryptPassword', getDecryptPasswordFromCloud);
@@ -63,7 +65,7 @@ router.post('/createIamUser',createIamUser);
 router.post('/editAwsServices',editAwsServices);
 router.post('/deleteAwsServices',deleteAwsServices);
 router.post('/addAwsServices',addAwsServices);
-router.post('/deleteIamAccount',deleteIamAccount)
+router.post('/deleteIamAccount',deleteIamAccount);
 
 module.exports = router;
 

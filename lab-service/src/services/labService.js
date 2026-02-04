@@ -686,6 +686,8 @@ const assignLab = async (lab, userIds, assign_admin_id,startDate,endDate,session
                 startDate,
                 endDate,
                 assign_admin_id,
+                'direct',
+                null
             ]);
             if (result.rows.length > 0) {
                 successfulAssignments.push(result.rows[0]);
@@ -875,7 +877,7 @@ const updateSingleVMAws =  async(catalogueName,
 //check whether the ami is created
 const getAmiInformation = async (lab_id) => {
     const result = await pool.query(queries.GET_AMI_INFO, [lab_id]);
-    return result.rows[0]; // Return the result to the controller
+    return result.rows[0] ||[]; // Return the result to the controller
 };
 
 const getAwsInstanceDetails = async (lab_id) => {

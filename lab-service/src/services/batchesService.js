@@ -26,7 +26,7 @@ const getUserData = async(userId,sessionToken)=>{
   }
 }
 
-const assignCloudsliceLab = async(lab, user, assign_admin_id, start_date, end_date,sessionToken)=>{
+const assignCloudsliceLab = async(lab, user, assign_admin_id, start_date, end_date,sessionToken,batch_id)=>{
     const existsLab =  await pool.query(batchQueries.CHECK_USER_ASSIGNED_LAB,[lab,user]);
             const userData = await getUserData(user,sessionToken)
             // if(existsLab.rows.length){
@@ -38,7 +38,7 @@ const assignCloudsliceLab = async(lab, user, assign_admin_id, start_date, end_da
             // }
             const result = await pool.query(
               batchQueries.INSERT_CLOUDSLICE_USER_ASSIGNMENT,
-              [lab, user, assign_admin_id, start_date, end_date]
+              [lab, user, assign_admin_id, start_date, end_date,'batch',batch_id]
             );
       
             if (!result.rows.length) {
@@ -173,7 +173,9 @@ const addUsersToBatch = async(req,res)=>{
             //ADD IF THERE ARE EXISTING LABS FOR BATCH
             for(const labId of labIds){
                 const getLab = await pool.query(batchQueries.GET_LAB_DETAILS_BATCH,[labId]);
-                if(!getLab.rows.length){
+                const getLabDetails = getLabsOfBatch?.rows?.find(lab=>lab?.lab_id === labId);
+               
+                if(!getLab?.rows?.length){
                     return res.status(404).send({
                         success:false,
                         message:"No lab found. Please check lab is created"
@@ -196,10 +198,11 @@ const addUsersToBatch = async(req,res)=>{
                  labId,
                  userId,
                  assignedBy,
-                 labDetails.start_date,
-                 labDetails.end_date,
-                 vmName
-                 
+                 getLabDetails.start_date,
+                 getLabDetails.end_date,
+                 vmName,
+                 'batch',
+                 batchId
              ]);
                 }
                 else if(labDetails.type === 'singlevm-aws'){
@@ -213,26 +216,28 @@ const addUsersToBatch = async(req,res)=>{
                            
                            labId,
                            userId,
-                           labDetails.start_date,
-                           labDetails.end_date,
+                           getLabDetails.start_date,
+                           getLabDetails.end_date,
                            assignedBy,
+                           'batch',
+                           batchId
                        ]);
                 }
                 else if(labDetails.type === 'cloudslice'){
-                    await assignCloudsliceLab (labId, userId, assignedBy,labDetails.start_date,labDetails.end_date,sessionToken)
+                    await assignCloudsliceLab (labId, userId, assignedBy,getLabDetails.start_date,getLabDetails.end_date,sessionToken,batchId)
                 }
                 else if (labDetails.type === 'singlevm-datacenter') {
-        const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USERASSIGNED_SINGLEVM_DATACENTER_LAB, [labId,userId]);
-        const userData = await getUserData(userId, sessionToken);
-        if (checkAlreadyAssigned.rows.length) {
-        //   return res.status(404).send({
-        //         success:false,
-        //         message:`Lab already assigned to ${userData.name}`
-        //     })
-        continue;
-        }
+                        const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USERASSIGNED_SINGLEVM_DATACENTER_LAB, [labId,userId]);
+                        const userData = await getUserData(userId, sessionToken);
+                        if (checkAlreadyAssigned.rows.length) {
+                        //   return res.status(404).send({
+                        //         success:false,
+                        //         message:`Lab already assigned to ${userData.name}`
+                        //     })
+                        continue;
+                        }
 
-        const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [userId, labId]);
+        const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [userId, labId,'batch',batchId]);
         if (!creds.rows.length){
             return res.status(404).send({
                 success:false,
@@ -244,9 +249,11 @@ const addUsersToBatch = async(req,res)=>{
           labId,
           userId,
           assignedBy,
-          labDetails.start_date,
-          labDetails.end_date,
-          creds.rows[0].id
+          getLabDetails.start_date,
+          getLabDetails.end_date,
+          creds.rows[0].id,
+          'batch',
+          batchId
         ]);
         if (!assign.rows.length){
             return res.status(404).send({
@@ -256,7 +263,7 @@ const addUsersToBatch = async(req,res)=>{
         }
                 }
                 else if (labDetails.type === 'vmcluster-datacenter') {
-        const userdata = await getUserData(userId,sessionToken);
+                const userdata = await getUserData(userId,sessionToken);
               const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USER_LABS_VMCLUSTERDATACENTER,[labId,userId]);
               if(checkAlreadyAssigned.rows.length){
                 // return res.status(404).send({
@@ -268,7 +275,7 @@ const addUsersToBatch = async(req,res)=>{
               let groupCredsIdToUser;
                 groupCredsIdToUser = await pool.query(
                   batchQueries.UPDATE_USER_GROUP_CREDS_TO_RANDOM_USER,
-                  [userId, labId]
+                  [userId, labId,'batch',batchId]
                 );
               // console.log(groupCredsIdToUser)
               if (!groupCredsIdToUser.rows.length) {
@@ -282,9 +289,11 @@ const addUsersToBatch = async(req,res)=>{
                 labId,
                 userId,
                 assignedBy,
-                labDetails.start_date,
-                labDetails.end_date,
+                getLabDetails.start_date,
+                getLabDetails.end_date,
                 groupCredsIdToUser.rows[0].id,
+                'batch',
+                batchId
               ]);
         
               if (!result.rows.length) {
@@ -426,7 +435,9 @@ const addLabsToBatch = async (req, res) => {
           assigned_by,
           start_date,
           end_date,
-          vmName
+          vmName,
+          'batch',
+          batch_id
         ]);
       }
       //single vm aws
@@ -444,6 +455,8 @@ const addLabsToBatch = async (req, res) => {
                            start_date,
                            end_date,
                            assigned_by,
+                           'batch',
+                           batch_id
                        ]);
       }
       // Datacenter single-VM
@@ -458,7 +471,7 @@ const addLabsToBatch = async (req, res) => {
         continue;
         }
 
-        const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [user.user_id, lab_id,org_id]);
+        const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [user.user_id, lab_id,org_id,'batch',batch_id]);
         if (!creds.rows.length){
             return res.status(404).send({
                 success:false,
@@ -472,7 +485,9 @@ const addLabsToBatch = async (req, res) => {
           assigned_by,
           start_date,
           end_date,
-          creds.rows[0].id
+          creds.rows[0].id,
+          'batch',
+          batch_id
         ]);
         if (!assign.rows.length){
             return res.status(404).send({
@@ -481,7 +496,6 @@ const addLabsToBatch = async (req, res) => {
             })
         }
       }
-
       // Datacenter cluster VM
       else if (type === 'vmcluster-datacenter') {
         const userdata = await getUserData(user.user_id,sessionToken);
@@ -496,7 +510,7 @@ const addLabsToBatch = async (req, res) => {
               let groupCredsIdToUser;
                 groupCredsIdToUser = await pool.query(
                   batchQueries.UPDATE_USER_GROUP_CREDS_TO_USER,
-                  [user.user_id, lab_id,org_id]
+                  [user.user_id, lab_id,org_id,'batch',batch_id]
                 );
               // console.log(groupCredsIdToUser)
               if (!groupCredsIdToUser.rows.length) {
@@ -513,6 +527,8 @@ const addLabsToBatch = async (req, res) => {
                 start_date,
                 end_date,
                 groupCredsIdToUser.rows[0].id,
+                'batch',
+                batch_id
               ]);
         
               if (!result.rows.length) {
@@ -524,7 +540,7 @@ const addLabsToBatch = async (req, res) => {
       }
       //cloudslice
       else if (type === 'cloudslice'){
-        await assignCloudsliceLab(lab_id, user.user_id, assigned_by, start_date, end_date,sessionToken)
+        await assignCloudsliceLab(lab_id, user.user_id, assigned_by, start_date, end_date,sessionToken,batch_id)
       }
     }
 
@@ -733,56 +749,121 @@ const updateBatchLab = async (req, res) => {
 };
 
 //delete user and its labs from batch
-const deleteUserAndItsLabs = async(req,res)=>{
-    try {
-        const {labIds,userId,batchId} = req.body;
-        if( !userId || !batchId){
-            return res.status(400).send({
-                success:false,
-                message:'Please provide all required fields'
-            })
-        }
-        await pool.query('BEGIN');
-        const deleteUser = await pool.query(batchQueries.DELETE_USER_FROM_BATCH,[userId,batchId]);
-        if(!deleteUser.rows.length){
-            return res.status(404).send({
-                success:false,
-                message:"Could not delete user from batch"
-            })
-        }
-        for (const labId of labIds){
-              await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,labId])
-             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, userId]);
-             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, userId]);
-             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, userId]);
-             await pool.query(batchQueries.DELETE_USER_CRED_FROM_CREDS,[null,userId]);
-             await pool.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[labId,userId]);
-             await pool.query(batchQueries.DELETE_RANDOM_USER_CREDS,[labId,userId]);
-             await pool.query(batchQueries.DELETE_USER_DATACENTER_LAB,[labId,userId]);
-             await pool.query(batchQueries.UPDATE_USER_COUNT,[-1,batchId]);
-        }
-        await pool.query(batchQueries.UPDATE_USER_COUNT,[-1,batchId])
-        await pool.query('COMMIT');
-        return res.status(200).send({
-            success:true,
-            message:"Successfully deleted user from batch",
-            data:deleteUser.rows[0]
-        })
-    } catch (error) {
-       await pool.query('ROLLBACK');
-       console.log(error);
-       return res.status(500).send({
-        success:false,
-        message:"Internal server error",
-        error:error.message
-       })
+const deleteUserAndItsLabs = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { labIds = [], userId, batchId } = req.body;
+    const cookies = cookie.parse(req.headers.cookie || '');
+    const sessionToken = cookies?.session_token;
+
+    if (!userId || !batchId) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required fields",
+      });
     }
-}
+
+    await client.query("BEGIN");
+
+    // 1️⃣ Delete user from batch
+    const deleteUser = await client.query(
+      batchQueries.DELETE_USER_FROM_BATCH,
+      [userId, batchId]
+    );
+
+    if (!deleteUser.rowCount) {
+      throw new Error("Could not delete user from batch");
+    }
+
+    // 2️⃣ Process labs
+    for (const labId of labIds) {
+
+      const amiRes = await axios.post(
+        `${process.env.BACKEND_URL}/api/v1/lab_ms/amiinformation`,
+        { lab_id: labId },
+        { headers: { Cookie: `session_token=${sessionToken}` } }
+      );
+
+      const instanceRes = await client.query(
+        batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
+        [userId, labId, "batch", batchId]
+      );
+
+      const instanceId = instanceRes.rows[0]?.instance_id;
+
+      if (instanceId) {
+        await axios.post(
+          `${process.env.BACKEND_URL}/api/v1/aws_ms/deleteBatchLabService`,
+          {
+            labId,
+            instanceId,
+            amiId: amiRes?.data?.result?.ami_id,
+            userId,
+          },
+          { headers: { Cookie: `session_token=${sessionToken}` } }
+        );
+      }
+      const iamAccountRes = await client.query(
+        batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, userId, "batch", batchId],
+      );
+      const userName = iamAccountRes.rows[0]?.username;
+      if(userName){
+        await axios.post(`${process.env.BACKEND_URL}/api/v1/aws_ms/deleteIamAccount`,{
+            userName},
+            {  headers: { Cookie: `session_token=${sessionToken}` } }
+        )
+      }
+      //delete proxmox vm
+       const deleteProxmoxVM = await client.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, userId, "batch", batchId])
+       const vmRes = deleteProxmoxVM.rows[0];
+       if(vmRes){
+         await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
+            {node:vmRes?.node , vmid:vmRes?.vmid},
+            {  headers: { Cookie: `session_token=${sessionToken}` } }
+        )
+       }
+      await Promise.all([
+        client.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, userId, "batch", batchId]),
+        
+        client.query(batchQueries.DELETE_USER_CRED_FROM_CREDS, [null, userId, "batch", batchId]),
+        client.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER, [labId, userId, "batch", batchId]),
+        client.query(batchQueries.DELETE_RANDOM_USER_CREDS, [labId, userId,"batch", batchId]),
+        client.query(batchQueries.DELETE_USER_DATACENTER_LAB, [labId, userId, "batch", batchId]),
+      ]);
+    }
+
+    // 3️⃣ Update user count ONCE
+    await client.query(batchQueries.UPDATE_USER_COUNT, [-1, batchId]);
+
+    await client.query("COMMIT");
+
+    return res.status(200).send({
+      success: true,
+      message: "Successfully deleted user and all labs from batch",
+      data: deleteUser.rows[0],
+    });
+
+  } catch (error) {
+    console.log("Error:",error);
+    await client.query("ROLLBACK");
+
+    return res.status(500).send({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  } finally {
+    client.release();
+  }
+};
 
 //delete batches
 const deleteBatch = async(req,res)=>{
     try {
         const {batchId} = req.params;
+        const cookies = cookie.parse(req.headers.cookie || '');
+        const sessionToken = cookies?.session_token;
     if(!batchId){
         return res.status(400).send({
             success:false,
@@ -792,18 +873,61 @@ const deleteBatch = async(req,res)=>{
     await pool.query('BEGIN');
     const getBatchUsers = await pool.query(batchQueries.GET_USERSOF_BATCH,[batchId]);
     const getBatchLabs = await pool.query(batchQueries.GET_BATCH_LABS,[batchId]);
-    if(getBatchLabs.rows.length){
-         if(getBatchUsers.rows.length){
+    if(getBatchLabs?.rows.length){
+         if(getBatchUsers?.rows.length){
       for(const lab of getBatchLabs.rows){
+         const amiRes = await axios.post(
+        `${process.env.BACKEND_URL}/api/v1/lab_ms/amiinformation`,
+        { lab_id: lab?.lab_id },
+        { headers: { Cookie: `session_token=${sessionToken}` } }
+      );
          for (const user of getBatchUsers.rows){
-            await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,lab.lab_id])
-            await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [lab.lab_id, user.user_id]);
-             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [lab.lab_id, user.user_id]);
-             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [lab.lab_id, user.user_id]);
-             await pool.query(batchQueries.DELETE_USER_CRED_FROM_CREDS,[null,user.user_id]);
-             await pool.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[lab.lab_id,user.user_id]);
-             await pool.query(batchQueries.DELETE_RANDOM_USER_CREDS,[lab.lab_id,user.user_id]);
-             await pool.query(batchQueries.DELETE_USER_DATACENTER_LAB,[lab.lab_id,user.user_id]);
+       const instanceRes = await pool.query(
+        batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
+        [user?.user_id, lab?.lab_id, "batch", batchId]
+      );
+
+      const instanceId = instanceRes.rows[0]?.instance_id;
+
+      if (instanceId) {
+        await axios.post(
+          `${process.env.BACKEND_URL}/api/v1/aws_ms/deleteBatchLabService`,
+          {
+            labId:lab?.lab_id,
+            instanceId,
+            amiId: amiRes?.data?.result?.ami_id,
+            userId:user?.user_id,
+          },
+          { headers: { Cookie: `session_token=${sessionToken}` } }
+        );
+      }
+        const iamAccountRes = await pool.query(
+        batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [lab?.lab_id, user?.user_id, "batch", batchId],
+      );
+      const userName = iamAccountRes.rows[0]?.username;
+      if(userName){
+        await axios.post(`${process.env.BACKEND_URL}/api/v1/aws_ms/deleteIamAccount`,{
+            userName},
+            {  headers: { Cookie: `session_token=${sessionToken}` } }
+        )
+      }
+      //delete proxmox vm
+       const deleteProxmoxVM = await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [lab?.lab_id, user?.user_id, "batch", batchId])
+       const vmRes = deleteProxmoxVM.rows[0];
+       if(vmRes){
+         await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
+            {node:vmRes?.node , vmid:vmRes?.vmid},
+            {  headers: { Cookie: `session_token=${sessionToken}` } }
+        )
+       }
+            // await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,lab.lab_id,'batch',batchId])
+            await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [lab.lab_id, user.user_id,'batch',batchId]);
+            //  await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [lab.lab_id, user.user_id,'batch',batchId]);
+            //  await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [lab.lab_id, user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_USER_CRED_FROM_CREDS,[null,user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[lab.lab_id,user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_RANDOM_USER_CREDS,[lab.lab_id,user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_USER_DATACENTER_LAB,[lab.lab_id,user.user_id,'batch',batchId]);
         }
       }
        await pool.query(batchQueries.DELETE_USERS_FROM_BATCH,[batchId]);
@@ -840,6 +964,8 @@ const deleteBatch = async(req,res)=>{
 const deleteLabFromBatch = async(req,res)=>{
     try {
         const {batchId,labId} = req.body;
+        const cookies = cookie.parse(req?.headers?.cookie || '');
+        const sessionToken = cookies?.session_token;
         if(!batchId || !labId){
             return res.status(400).send({
                 success:false,
@@ -855,21 +981,60 @@ const deleteLabFromBatch = async(req,res)=>{
             })
         }
         const getBatchUsers = await pool.query(batchQueries.GET_USERSOF_BATCH,[batchId]);
-        if(!getBatchUsers.rows.length){
-            return res.status(200).send({
-                success:true,
-                message:"No users found in the batch"
-            })
-        }
+
+                const amiRes = await axios.post(
+                `${process.env.BACKEND_URL}/api/v1/lab_ms/amiinformation`,
+                { lab_id: labId },
+                { headers: { Cookie: `session_token=${sessionToken}` } }
+            );
         for (const user of getBatchUsers.rows){
-              await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,labId])
-            await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, user.user_id]);
-             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, user.user_id]);
-             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, user.user_id]);
-             await pool.query(batchQueries.DELETE_USER_CRED_FROM_CREDS,[null,user.user_id]);
-             await pool.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[labId,user.user_id]);
-             await pool.query(batchQueries.DELETE_RANDOM_USER_CREDS,[labId,user.user_id]);
-             await pool.query(batchQueries.DELETE_USER_DATACENTER_LAB,[labId,user.user_id]);
+       
+      const instanceRes = await pool.query(
+        batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
+        [user?.user_id, labId, "batch", batchId]
+      );
+
+      const instanceId = instanceRes.rows[0]?.instance_id;
+
+      if (instanceId) {
+        await axios.post(
+          `${process.env.BACKEND_URL}/api/v1/aws_ms/deleteBatchLabService`,
+          {
+            labId,
+            instanceId,
+            amiId: amiRes?.data?.result?.ami_id,
+            userId:user?.user_id,
+          },
+          { headers: { Cookie: `session_token=${sessionToken}` } }
+        );
+      }
+       const iamAccountRes = await pool.query(
+        batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, user?.user_id, "batch", batchId],
+      );
+      const userName = iamAccountRes.rows[0]?.username;
+      if(userName){
+        await axios.post(`${process.env.BACKEND_URL}/api/v1/aws_ms/deleteIamAccount`,{
+            userName},
+            {  headers: { Cookie: `session_token=${sessionToken}` } }
+        )
+      }
+      //delete proxmox vm
+       const deleteProxmoxVM = await client.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, user?.user_id, "batch", batchId])
+       const vmRes = deleteProxmoxVM.rows[0];
+       if(vmRes){
+         await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
+            {node:vmRes?.node , vmid:vmRes?.vmid},
+            {  headers: { Cookie: `session_token=${sessionToken}` } }
+        )
+       }
+            //  await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,labId,'batch',batchId])
+             await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, user.user_id,'batch',batchId]);
+            //  await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, user.user_id,'batch',batchId]);
+            //  await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_USER_CRED_FROM_CREDS,[null,user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[labId,user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_RANDOM_USER_CREDS,[labId,user.user_id,'batch',batchId]);
+             await pool.query(batchQueries.DELETE_USER_DATACENTER_LAB,[labId,user.user_id,'batch',batchId]);
         }
         await pool.query(batchQueries.UPDATE_BATCHLAB_COUNT,[-1,batchId]);
         await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB,[-1,batchId]);
@@ -924,7 +1089,5 @@ module.exports = {
     getLabsForBatch,
     deleteUserAndItsLabs,
     deleteLabFromBatch,
-    updateBatchLab
-
-    
+    updateBatchLab    
 }

@@ -13,6 +13,7 @@ const { getUserEmail, markEmailAsSent, isWithinQuietHours, nowInTz, emailPlaceho
 const { sendNotificationToMail } = require('./notificationServices');
 const { sendNotification } = require('../socket');
 const promoxQueries = require('./promoxQueries');
+const batchesQueries = require('./batchesQueries');
 
 const PROXMOX_URL = process.env.PROXMOX_URL;
 const TOKEN_ID = process.env.PROXMOX_TOKEN_ID;
@@ -168,9 +169,13 @@ const getVmIp=async(node, vmid) =>{
 const getSingleVmProxmoxLab = async (req, res) => {
   try {
     const { adminId } = req.body;
-
-    const getLabDetails = await pool.query(proxmoxQueries.GET_LAB_DETAILS, [adminId]);
-
+    let getLabDetails;
+    if(adminId === 'superadmin'){
+      getLabDetails = await pool.query(proxmoxQueries.GET_LABS_FOR_SUPERADMIN);
+    }
+    else{
+     getLabDetails = await pool.query(proxmoxQueries.GET_LAB_DETAILS, [adminId]);
+    }
     if (!getLabDetails.rows.length) {
       return res.status(200).send({
         success: false,
@@ -628,10 +633,10 @@ const createVM = async (req, res) => {
     );
   const upid = cloneResp.data.data;
     if(type === 'org'){
-      await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,labid,userid])
+      await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,true,labid,userid])
     }
     else{
-    await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[true,vmdetails_id]);
+    await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[true,vmdetails_id,false]);
     }
 // Poll task until finished
 while (true) {
@@ -682,7 +687,7 @@ if (storage && Number(storage) > 0) {
  }
  else{
   await pool.query(proxmoxQueries.UPDATE_LAUNCH,[true,node,labid,vmid]);
-  await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[false,vmdetails_id])
+  await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[false,vmdetails_id,false])
 
  }
    return res.status(200).send({
@@ -694,7 +699,7 @@ if (storage && Number(storage) > 0) {
 
   } catch (err) {
     console.log("❌ Error creating VM:", err);
-    await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[false,vmdetails_id])
+    await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[false,vmdetails_id,false])
     return res.status(500).json({
       success: false,
       error: err.response?.data || err.message,
@@ -705,8 +710,8 @@ if (storage && Number(storage) > 0) {
 //create user vn
 const createUserVm = async (req,res)=>{
   try {
-    const {node,labid,name,type,purchased,userid} = req.body;
-    if(!node||!labid||!name||!type||!userid){
+    const {labid,name,type,purchased,userid,vmdetailsId} = req.body;
+    if(!labid||!name||!type||!userid){
       return res.status(400).send({
         success:false,
         message:'Please provide all required fields'
@@ -722,6 +727,9 @@ const createUserVm = async (req,res)=>{
       })
     }
     const template = getTempInfo.rows[0].templateid;
+    const vmDetailsConfig = await pool.query(proxmoxQueries.GET_LAB_CONFIGURATIONS,[vmdetailsId]);
+    const vmDetails = vmDetailsConfig?.rows[0];
+    const node = vmDetails?.node;
     await pool.query('BEGIN')
      if(type=='user' && purchased){
       await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED_LOADING,[true,labid,userid])
@@ -755,7 +763,7 @@ const createUserVm = async (req,res)=>{
       await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED_LOADING,[false,labid,userid])
     }
     else{
-      await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER,[true,labid,vmid,userid])
+      await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER,[true,labid,vmid,userid,node])
       await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_LOADING,[false,labid,userid]);
     }
 
@@ -950,17 +958,25 @@ const startVM = async (req, res) => {
         message:"Please provide required fields"
       })
      }
+
+      //  Get current VM status
+    const statusResp = await api.get(
+      `/nodes/${node}/qemu/${vmid}/status/current`
+    );
+
+    const status = statusResp.data.data.status;
+    if(status === 'stopped'){
       //start vm
-      await api.post(`/nodes/${node}/qemu/${vmid}/status/start`);
+      await api.post(`/nodes/${node}/qemu/${vmid}/status/start`);}
       await pool.query('BEGIN');
      if(type === 'user' && purchased){
       await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_PURCHASED_RUNNING,[true,lab_id,userid]);
      }
      else if(type === 'org'){
-      await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,lab_id,userid])
+      await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,lab_id,userid,true])
      }
      else if (type === 'sup'){
-       await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[true,vmDetailsId])
+       await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[true,vmDetailsId,true])
      }
      else{
        await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_RUNNING,[true,lab_id,userid])
@@ -1001,7 +1017,7 @@ const startVM = async (req, res) => {
  * body: { node, vmid }
  */
 const stopVM = async (req, res) => {
-  const { lab_id,node, vmid,userid,purchased } = req.body;
+  const { lab_id,node, vmid,userid,purchased ,type,vmdetails_id} = req.body;
 
   try {
     // 🔍 Validation
@@ -1046,7 +1062,13 @@ const stopVM = async (req, res) => {
     }
     if(purchased){
     await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_PURCHASED_RUNNING,[false,lab_id,userid])
-  } 
+   } 
+    else if(type === 'org'){
+      await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,lab_id,userid,false])
+     }
+     else if (type === 'sup'){
+       await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[true,vmdetails_id,false])
+     }
   else{
     await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_RUNNING,[false,lab_id,userid])
   }
@@ -1234,7 +1256,6 @@ const editProxmoxVm = async (req, res) => {
 const deleteVmInProxmox = async (req, res) => {
   try {
     const { labId,node, vmid,type } = req.body;
-    console.log(req.body)
     let deleteResp;
     if(vmid){
        // Step 1: Get VM status
@@ -1303,6 +1324,57 @@ const deleteVmInProxmox = async (req, res) => {
     });
   }
 };
+
+const deleteVMOFProxmox = async(req,res)=>{
+  try {
+    const { node, vmid } = req.body;
+    let deleteResp;
+    if(vmid){
+       // Step 1: Get VM status
+    const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
+    const isRunning = statusResp.data.data.status === 'running';
+
+    // Step 2: Stop the VM if it's running
+    if (isRunning) {
+      console.log(`VM ${vmid} is running — stopping before delete...`);
+      await api.post(`/nodes/${node}/qemu/${vmid}/status/stop`);
+      // Wait until it's fully stopped
+      let stopped = false;
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 2000)); // 2s interval
+        const checkStatus = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
+        if (checkStatus.data.data.status === 'stopped') {
+          stopped = true;
+          break;
+        }
+      }
+      if (!stopped) {
+        return res.status(400).send({
+          success: false,
+          message: 'VM did not stop in time — aborting delete for safety.',
+        });
+      }
+    }
+
+    // Step 3: Delete VM with purge=1 (full cleanup)
+
+    console.log(`Deleting VM ${vmid} from node ${node}...`);
+     deleteResp = await api.delete(`/nodes/${node}/qemu/${vmid}`, {
+      params: { purge: 1 },
+    });
+      return res.status(200).send({
+        success:true,
+        message:"Successfully deleted the vm"
+      })
+    }
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send({
+      success:false,
+      message:"Could not delete the proxmox vm"
+    })
+  }
+}
 
 //create a template
 const createTemplateInProxmox = async(req,res) =>{
@@ -1539,7 +1611,30 @@ const getOrgAssignedLabs = async (req,res)=>{
     })
   }
 }
-
+const getLabAdminsLab = async(req,res)=>{
+  try {
+     const {userIds} = req.body;
+     if(!userIds.length){
+       return res.status(400).send({
+        success:false,
+        message:"Please provide the user ids"
+       })
+     }
+     const getLabAdminsLab = await pool.query(promoxQueries.GET_LABADMINS_LAB,[userIds]);
+     return res.status(200).send({
+      success:true,
+      message:"Successfully accessed labs",
+      data:getLabAdminsLab?.rows || []
+     })
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send({
+      success:false,
+      message:"Intenal Server Error",
+      error:error.message
+    })
+  }
+}
 //get single vm proxmox labs
 const getSingleVMProxmoxLabs = async (req,res)=>{
   try {
@@ -1720,9 +1815,10 @@ const assignSingleVmToUser = async(req,res)=>{
                  assignedBy,
                  startDate,
                  endDate,
-                 vmName
-                 
-             ]);
+                 vmName,
+                 'direct',
+                 null
+                 ]);
              if (result.rows.length > 0) {
                  successfulAssignments.push(result.rows[0]);
                  await pool.query('BEGIN');
@@ -2039,5 +2135,7 @@ module.exports = {
     getTemplatesByNode,
     getIpOfVm,
     createUserVm,
-    stopVM
+    stopVM,
+    deleteVMOFProxmox,
+    getLabAdminsLab
 }

@@ -3,7 +3,7 @@ module.exports = {
     INSERT_VM_DETAILS : `INSERT INTO proxmox_vm_details (node,vmname,description,storagetype,storage,cpu,ram,networkbridge,nicmodel,firewall,boot,template_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     INSERT_TEMPLATE_INFORMATION: `INSERT INTO templateinformation (labid,templateid) values($1,$2) RETURNING *`,
     INSERT_ORG_ASSIGNMENT:`INSERT INTO singlevmproxmoxorgassignment (labid,orgid,startdate,enddate,assigned_by,user_id,vmname) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    INSERT_SINGLEVM_USER_ASSIGNMENT:`INSERT INTO singlevmproxmoxuserassignment (labid,user_id,assigned_by,startdate,enddate,vmname) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+    INSERT_SINGLEVM_USER_ASSIGNMENT:`INSERT INTO singlevmproxmoxuserassignment (labid,user_id,assigned_by,startdate,enddate,vmname,assignment_type,batch_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
 
     CHECK_ALREADY_ASSIGNED:`SELECT * FROM singlevmproxmoxuserassignment where user_id=$1 and labid=$2`,
 
@@ -15,9 +15,10 @@ module.exports = {
 
         SELECT id, name 
         FROM organization_users 
-        WHERE id = $1;
-        `,
+        WHERE id = $1;`,
+    GET_LABS_FOR_SUPERADMIN:`SELECT * FROM singlevmproxmox_lab`,
     GET_LAB_DETAILS: `SELECT * FROM singlevmproxmox_lab WHERE user_id=$1`,
+    GET_LABADMINS_LAB:`SELECT * FROM singlevmproxmox_lab WHERE user_id=ANY($1)`,
     GET_LAB_LABID:`SELECT * FROM singlevmproxmox_lab WHERE labid=$1`,
     GET_LAB_CONFIGURATIONS : `SELECT * FROM PROXMOX_VM_DETAILS WHERE vmdetails_id=$1`,
     GET_LAB_STATUS:`SELECT * FROM proxmox_vm_details where labid=$1 and vmid=$2`,
@@ -31,11 +32,11 @@ module.exports = {
     GET_SINGLEVM_USER_PURCHASED_LABS:`SELECT * FROM singlevmproxmox_purchased_labs where user_id=$1`,
 
     UPDATE_LAUNCH:`UPDATE PROXMOX_VM_DETAILS SET islaunched=$1,vmid=$4 where node=$2 and labid=$3 RETURNING *`,
-    UPDATE_LAUNCH_LOADING:`UPDATE PROXMOX_VM_DETAILS SET isloading=$1 where vmdetails_id=$2 RETURNING *`,
+    UPDATE_LAUNCH_LOADING:`UPDATE PROXMOX_VM_DETAILS SET isloading=$1 ,isrunning = $3 where vmdetails_id=$2 RETURNING *`,
    
-    UPDATE_LAUNCH_ORG_LOADING:`UPDATE singlevmproxmoxorgassignment SET isprocessing=$1 where labid=$2 and user_id=$3`,
+    UPDATE_LAUNCH_ORG_LOADING:`UPDATE singlevmproxmoxorgassignment SET isprocessing=$1,isrunning=$4 where labid=$2 and user_id=$3`,
     UPDATE_LAUNCH_ORG:`UPDATE singlevmproxmoxorgassignment SET islaunched=$1,vmid=$3 where  labid=$2 and user_id=$4 RETURNING *`,
-    UPDATE_LAUNCH_USER:`UPDATE singlevmproxmoxuserassignment SET islaunched=$1 , vmid=$3 where  labid=$2 and user_id=$4 RETURNING *`,
+    UPDATE_LAUNCH_USER:`UPDATE singlevmproxmoxuserassignment SET islaunched=$1 , vmid=$3,node=$5 where  labid=$2 and user_id=$4 RETURNING *`,
     UPDATE_LAUNCH_USER_LOADING:`UPDATE singlevmproxmoxuserassignment SET isprocessing=$1  where  user_id=$3 and labid=$2 RETURNING *`,
     UPDATE_LAUNCH_USER_PURCHASED:`UPDATE singlevmproxmox_purchased_labs SET islaunched=$1,startdate=NOW(),enddate= NOW() + ($4 || ' days')::INTERVAL,vmid=$3 where  labid=$2 RETURNING *`,
    

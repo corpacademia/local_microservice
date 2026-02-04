@@ -1186,7 +1186,6 @@ const deleteUserAssignedCloudSliceLabs = async(req,res)=>{
 const updateQuizExerciseStatusOfUser = async(req,res)=>{
     try {
         const exerciseId = req.params.exerciseId;
-        const {data,moduleId,userId} = req.body;
         if(!exerciseId || !data || !moduleId || !userId){
             return res.status(400).send({
                 success:false,
