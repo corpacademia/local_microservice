@@ -15,7 +15,8 @@ const {
     getLabsForBatch,
     deleteUserAndItsLabs,
     deleteLabFromBatch,
-    updateBatchLab
+    updateBatchLab,
+    updateUserBatchLabs
 } = require('../services/batchesService');
 
 //routes
@@ -31,6 +32,7 @@ router.post('/assignLabToBatch',addLabsToBatch);
 router.post('/getLabs',getLabsForBatch);
 router.post('/removeUserFromBatch',deleteUserAndItsLabs);
 router.post('/removeLabFromBatch',deleteLabFromBatch);
-router.post('/updateBatchLab',updateBatchLab)
+router.post('/updateBatchLab',updateBatchLab);
+router.post('/updateUserBatchLabs',updateUserBatchLabs)
 
 module.exports = router;

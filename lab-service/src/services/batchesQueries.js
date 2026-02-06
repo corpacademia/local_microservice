@@ -1,4 +1,3 @@
-const { DELETE_CLOUD_ASSIGNED_INSTANCE } = require("../../../aws-service/src/services/awsQueries");
 
 module.exports ={
     CREATE_BATCH :`INSERT INTO batches(name,description,created_by,startdate,enddate) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
@@ -145,8 +144,6 @@ module.exports ={
       WHERE orgid = $2
     )
 `,
-
-
     GET_LAB_DETAILS_BATCH: `
     SELECT 
         lab_id::uuid AS lab_id,
@@ -219,6 +216,8 @@ module.exports ={
     UPDATE_BATCH_USERS_TLAB:`UPDATE batch_users SET total_labs = total_labs + $1 WHERE batch_id = $2;`,
     UPDATE_BATCH_USER_TLAB:`UPDATE batch_users SET total_labs = total_labs + $1 WHERE user_id = $2;`,
     UPDATE_BATCHLAB_COUNT:`UPDATE batches SET lab_count = lab_count + $1 WHERE id=$2`,
+    UPDATE_BATCHLAB_USER_COUNT:`UPDATE batch_users set labs_started = labs_started + $1 WHERE batch_id=$2 and user_id=$3 RETURNING *`,
+    UPDATE_BATCH_USER_TSTARTED:`UPDATE batchlabs set users_started=users_started + $1 WHERE lab_id=$2 AND batch_id=$3 RETURNING *`,
     UPDATE_USER_COUNT:`UPDATE batches
     SET user_count = GREATEST(user_count + $1, 0)
     WHERE id = $2;

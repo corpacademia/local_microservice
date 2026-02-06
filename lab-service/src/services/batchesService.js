@@ -748,6 +748,39 @@ const updateBatchLab = async (req, res) => {
   }
 };
 
+//update user batch labs
+const updateUserBatchLabs = async(req,res)=>{
+  try {
+    const {userId,batchId} = req.body;
+    if(!userId || !batchId){
+      return res.status(400).send({
+        success:false,
+        message:"Please provide the required fields"
+      })
+    }
+    const update = await pool.query(batchQueries.UPDATE_BATCHLAB_USER_COUNT,[1,batchId,userId]);
+    const updateBatchLab = await pool.query(batchQueries.UPDATE_BATCH_USER_TSTARTED,[1,labId,batchId])
+    if(!update.rows.length || !updateBatchLab.rows.length){
+      return res.status(404).send({
+        success:false,
+        message:"Could not update the status"
+      })
+    }
+    return res.status(200).send({
+      success:true,
+      message:"Successfully updated the status",
+      data:update.rows
+    })
+  } catch (error) {
+    console.log(error)
+     return res.status(500).send({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+}
+
 //delete user and its labs from batch
 const deleteUserAndItsLabs = async (req, res) => {
   const client = await pool.connect();
@@ -857,6 +890,162 @@ const deleteUserAndItsLabs = async (req, res) => {
     client.release();
   }
 };
+// const deleteUserAndItsLabs = async (req, res) => {
+//   const client = await pool.connect();
+
+//   // store external cleanup tasks
+//   const cleanupTasks = [];
+
+//   try {
+//     const { labIds = [], userId, batchId } = req.body;
+
+//     if (!userId || !batchId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "userId and batchId are required",
+//       });
+//     }
+
+//     const cookies = cookie.parse(req.headers.cookie || "");
+//     const sessionToken = cookies?.session_token;
+
+//     await client.query("BEGIN");
+
+//     // 1 Delete user from batch
+//     const deleteUser = await client.query(
+//       batchQueries.DELETE_USER_FROM_BATCH,
+//       [userId, batchId]
+//     );
+
+//     if (!deleteUser.rowCount) {
+//       throw new Error("User not found in batch");
+//     }
+
+//     // 2 Process labs
+//     for (const labId of labIds) {
+
+//       //  Delete cloud instance mapping
+//       const instanceRes = await client.query(
+//         batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
+//         [userId, labId, "batch", batchId]
+//       );
+
+//       if (instanceRes.rowCount) {
+//         cleanupTasks.push({
+//           type: "AWS_INSTANCE",
+//           labId,
+//           instanceId: instanceRes.rows[0].instance_id,
+//         });
+//       }
+
+//       // 🔹 Delete IAM account
+//       const iamRes = await client.query(
+//         batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE,
+//         [labId, userId, "batch", batchId]
+//       );
+
+//       if (iamRes.rowCount) {
+//         cleanupTasks.push({
+//           type: "IAM",
+//           userName: iamRes.rows[0].username,
+//         });
+//       }
+
+//       //  Delete Proxmox VM
+//       const vmRes = await client.query(
+//         batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM,
+//         [labId, userId, "batch", batchId]
+//       );
+
+//       if (vmRes.rowCount) {
+//         cleanupTasks.push({
+//           type: "PROXMOX",
+//           node: vmRes.rows[0].node,
+//           vmid: vmRes.rows[0].vmid,
+//         });
+//       }
+
+//       //  Other DB cleanup
+//       await Promise.all([
+//         client.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, userId, "batch", batchId]),
+//         client.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER, [labId, userId, "batch", batchId]),
+//         client.query(batchQueries.DELETE_RANDOM_USER_CREDS, [labId, userId, "batch", batchId]),
+//         client.query(batchQueries.DELETE_USER_DATACENTER_LAB, [labId, userId, "batch", batchId]),
+//       ]);
+//     }
+
+//     // 3️ Update user count safely
+//     await client.query(
+//       `
+//       UPDATE batches
+//       SET user_count = GREATEST(user_count - 1, 0)
+//       WHERE id = $1
+//       `,
+//       [batchId]
+//     );
+
+//     await client.query("COMMIT");
+
+//     // ===============================
+//     //  EXTERNAL CLEANUP (AFTER COMMIT)
+//     // ===============================
+
+//     for (const task of cleanupTasks) {
+//       if (task.type === "AWS_INSTANCE") {
+//         const amiRes = await axios.post(
+//           `${process.env.BACKEND_URL}/api/v1/lab_ms/amiinformation`,
+//           { lab_id: task.labId },
+//           { headers: { Cookie: `session_token=${sessionToken}` } }
+//         );
+
+//         await axios.post(
+//           `${process.env.BACKEND_URL}/api/v1/aws_ms/deleteBatchLabService`,
+//           {
+//             labId: task.labId,
+//             instanceId: task.instanceId,
+//             amiId: amiRes?.data?.result?.ami_id,
+//             userId,
+//           },
+//           { headers: { Cookie: `session_token=${sessionToken}` } }
+//         );
+//       }
+
+//       if (task.type === "IAM") {
+//         await axios.post(
+//           `${process.env.BACKEND_URL}/api/v1/aws_ms/deleteIamAccount`,
+//           { userName: task.userName },
+//           { headers: { Cookie: `session_token=${sessionToken}` } }
+//         );
+//       }
+
+//       if (task.type === "PROXMOX") {
+//         await axios.post(
+//           `${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
+//           { node: task.node, vmid: task.vmid },
+//           { headers: { Cookie: `session_token=${sessionToken}` } }
+//         );
+//       }
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "User and labs deleted successfully",
+//     });
+
+//   } catch (error) {
+//     await client.query("ROLLBACK");
+
+//     console.error("Delete user error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   } finally {
+//     client.release();
+//   }
+// };
+
 
 //delete batches
 const deleteBatch = async(req,res)=>{
@@ -1089,5 +1278,6 @@ module.exports = {
     getLabsForBatch,
     deleteUserAndItsLabs,
     deleteLabFromBatch,
-    updateBatchLab    
+    updateBatchLab,
+    updateUserBatchLabs 
 }

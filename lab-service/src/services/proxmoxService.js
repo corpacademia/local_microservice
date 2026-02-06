@@ -1367,6 +1367,10 @@ const deleteVMOFProxmox = async(req,res)=>{
         message:"Successfully deleted the vm"
       })
     }
+    return res.status(200).send({
+        success:true,
+        message:"No Vm to delete"
+      })
   } catch (error) {
     console.log(error);
     return res.status(500).send({
