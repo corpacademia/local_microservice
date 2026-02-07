@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import redis from "redis";
+require('dotenv').config()
 
 let io;
 
@@ -13,7 +14,7 @@ export const initSocket = (server) => {
   });
 
   // Create Redis clients
-  const subscriber = redis.createClient(6379, "localhost");
+  const subscriber = redis.createClient(process.env.REDIS_PORT || 6379,  process.env.REDIS_HOST || "localhost");
 
   subscriber.on("error", (err) => {
     console.error("Redis Sub Error:", err);

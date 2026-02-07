@@ -25,7 +25,7 @@
 const redis = require("redis");
 
 // Publisher client
-const publisher = redis.createClient(6379, "localhost");
+const publisher = redis.createClient(process.env.REDIS_PORT || 6379,  process.env.REDIS_HOST || "localhost");
 
 publisher.on("error", (err) => console.error("Redis Pub Error:", err));
 

@@ -305,6 +305,7 @@ const addUsersToBatch = async(req,res)=>{
       }
 
                 await pool.query(batchQueries.UPDATE_BATCH_USER_TLAB,[1,userId]);
+                await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batchId,labId])
 
             }
 
@@ -547,6 +548,7 @@ const addLabsToBatch = async (req, res) => {
     // Update batch counters
     await pool.query(batchQueries.UPDATE_BATCHLAB_COUNT, [1, batch_id]);
     await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB, [1, batch_id]);
+    await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batch_id,lab_id])
 
     await pool.query('COMMIT');
 
@@ -1162,6 +1164,7 @@ const deleteLabFromBatch = async(req,res)=>{
             })
         }
         await pool.query("BEGIN")
+         
         const deleteLab = await pool.query(batchQueries.DELETE_LAB_FROM_BATCH,[labId,batchId]);
         if(!deleteLab.rows.length){
             return res.status(404).send({
@@ -1177,11 +1180,11 @@ const deleteLabFromBatch = async(req,res)=>{
                 { headers: { Cookie: `session_token=${sessionToken}` } }
             );
         for (const user of getBatchUsers.rows){
-       
-      const instanceRes = await pool.query(
-        batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
-        [user?.user_id, labId, "batch", batchId]
-      );
+       const update = await pool.query(batchQueries.UPDATE_BATCHLAB_USER_COUNT,[-1,batchId,user?.user_id]);
+        const instanceRes = await pool.query(
+          batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
+          [user?.user_id, labId, "batch", batchId]
+        );
 
       const instanceId = instanceRes.rows[0]?.instance_id;
 
@@ -1208,14 +1211,14 @@ const deleteLabFromBatch = async(req,res)=>{
         )
       }
       //delete proxmox vm
-       const deleteProxmoxVM = await client.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, user?.user_id, "batch", batchId])
+       const deleteProxmoxVM = await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_SINGLEVM, [labId, user?.user_id, "batch", batchId])
        const vmRes = deleteProxmoxVM.rows[0];
-       if(vmRes){
-         await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
-            {node:vmRes?.node , vmid:vmRes?.vmid},
-            {  headers: { Cookie: `session_token=${sessionToken}` } }
-        )
-       }
+          if(vmRes){
+            await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
+                {node:vmRes?.node , vmid:vmRes?.vmid},
+                {  headers: { Cookie: `session_token=${sessionToken}` } }
+            )
+          }
             //  await pool.query(batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,[user.user_id,labId,'batch',batchId])
              await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_LABASSIGNMENTS, [labId, user.user_id,'batch',batchId]);
             //  await pool.query(batchQueries.DELETE_USERLABS_FROM_BATCH_CLOUDSLICE, [labId, user.user_id,'batch',batchId]);

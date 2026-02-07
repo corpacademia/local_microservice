@@ -2,11 +2,12 @@
 const session = require("express-session");
 const RedisStore = require("connect-redis")(session);
 const redis = require("redis");
+require('dotenv').config();
 
 // create old-style redis client
 const redisClient = redis.createClient({
-  host: "127.0.0.1",
-  port: 6379,
+   host: process.env.REDIS_HOST || "localhost",
+    port: process.env.REDIS_PORT || 6379
 });
 
 const sessionMiddleware = session({

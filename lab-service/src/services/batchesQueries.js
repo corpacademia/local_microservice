@@ -213,10 +213,11 @@ module.exports ={
 
     UPDATE_BATCH_DETAILS:`UPDATE  batches set name=$1,description=$2,startdate=$3,enddate=$4 where id=$5 RETURNING *`,
     UPDATE_LAB_BATCH:`UPDATE batchlabs set lab_id=$1,lab_name=$2,start_date=$3,end_date=$4 ,remaining_days=$5,trainer_id=$6,trainer_name=$7 WHERE lab_id=$8 RETURNING *`,
-    UPDATE_BATCH_USERS_TLAB:`UPDATE batch_users SET total_labs = total_labs + $1 WHERE batch_id = $2;`,
-    UPDATE_BATCH_USER_TLAB:`UPDATE batch_users SET total_labs = total_labs + $1 WHERE user_id = $2;`,
-    UPDATE_BATCHLAB_COUNT:`UPDATE batches SET lab_count = lab_count + $1 WHERE id=$2`,
-    UPDATE_BATCHLAB_USER_COUNT:`UPDATE batch_users set labs_started = labs_started + $1 WHERE batch_id=$2 and user_id=$3 RETURNING *`,
+    UPDATE_BATCH_USERS_TLAB:`UPDATE batch_users SET total_labs =GREATEST(COALESCE(total_labs, 0) + $1, 0) WHERE batch_id = $2;`,
+    UPDATE_BATCH_USERS_TLAB_STARTED:`UPDATE batchlabs SET total_users =GREATEST(COALESCE(total_users, 0) + $1, 0) WHERE batch_id = $2 AND lab_id=$3;`,
+    UPDATE_BATCH_USER_TLAB:`UPDATE batch_users SET total_labs = GREATEST(COALESCE(total_labs, 0) + $1, 0) WHERE user_id = $2;`,
+    UPDATE_BATCHLAB_COUNT:`UPDATE batches SET lab_count =GREATEST(COALESCE(lab_count, 0) + $1, 0) WHERE id=$2`,
+    UPDATE_BATCHLAB_USER_COUNT:`UPDATE batch_users set labs_started = GREATEST(COALESCE(labs_started, 0) + $1, 0) WHERE batch_id=$2 and user_id=$3 RETURNING *`,
     UPDATE_BATCH_USER_TSTARTED:`UPDATE batchlabs set users_started=users_started + $1 WHERE lab_id=$2 AND batch_id=$3 RETURNING *`,
     UPDATE_USER_COUNT:`UPDATE batches
     SET user_count = GREATEST(user_count + $1, 0)
