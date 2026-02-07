@@ -121,6 +121,7 @@ router.post('/getInstances',getInstanceOnParameters);
 router.post('/getInstanceDetails',getInstanceDetailsForPricing);
 router.post('/getLabsConfigured',getLabsConfigured);
 router.post('/amiInformation',awsConfigure);
+router.post('/checkvmcreated',awsConfigure);
 router.post('/awsCreateInstanceDetails',getAwsInstanceDetails);
 router.post('/awsInstanceOfUsers',getAwsInstanceDetailsOfUsers);
 router.post('/updateawsInstanceOfUsers',updateAwsInstanceDetailsOfUsers);

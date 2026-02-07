@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import redis from "redis";
-require('dotenv').config()
+import dotenv from "dotenv";
 
 let io;
 

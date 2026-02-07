@@ -33,7 +33,7 @@ const {
     deleteIamAccount,
     deleteBatchLabService
 } = require('../controllers/awsController');
-const { awsConfigure } = require('../../../lab-service/src/controllers/labController');
+// const { awsConfigure } = require('../../../lab-service/src/controllers/labController');
 
 router.post('/python',ec2Terraform);
 router.post('/pythontf',runTf);
@@ -59,7 +59,7 @@ router.post('/checkLabStatus', checkCloudAssignedInstanceLaunched);
 router.post('/checkIsLabInstanceLaunched', checkLabCloudInstanceLaunched);
 router.post('/stopInstance', stopInstance);
 router.post('/restart_instance',restartInstance);
-router.post('/checkvmcreated',awsConfigure);
+// router.post('/checkvmcreated',awsConfigure);
 router.post('/labprogress',labProgress);
 router.post('/createIamUser',createIamUser);
 router.post('/editAwsServices',editAwsServices);
