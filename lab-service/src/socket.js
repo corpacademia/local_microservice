@@ -23,6 +23,7 @@
 
 
 const redis = require("redis");
+require('dotenv').config();
 
 // Publisher client
 const publisher = redis.createClient(process.env.REDIS_PORT || 6379,  process.env.REDIS_HOST || "localhost");
