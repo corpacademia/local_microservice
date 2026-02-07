@@ -3,7 +3,7 @@ const {hashPassword , comparePassword,signJwt,verifyToken} = require('../helper/
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const userServices = require('../services/userServices');
-const { create } = require('../../../lab-service/src/config/proxmoxApi');
+// const { create } = require('../../../lab-service/src/config/proxmoxApi');
 
 
 
