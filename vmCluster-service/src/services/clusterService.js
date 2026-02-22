@@ -602,7 +602,6 @@ const updateUserVMClusterDatacenterStatus = async(labId,userId,status)=>{
             throw new Error("Please provide the lab id, user id and status");
         }
         const response = await pool.query(clusterQueries.UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS,[status,labId,userId]);
-        console.log(response.rows)
         if(!response.rows.length){
             throw new Error("No lab found for this user");
         }

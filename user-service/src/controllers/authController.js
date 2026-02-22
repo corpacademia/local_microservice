@@ -54,7 +54,7 @@ const signupController = async (req, res) => {
 const uploadBulkUsers = async(req,res)=>{
   try {
       const {users,organizationId,createdBy,orgName,orgType,role} = req.body;
-      if(users.length ===0 || !organizationId || !createdBy ||!role){
+      if(users.length ===0 || !createdBy ||!role){
           return res.status(400).send({
             success:false,
             message:"Please provide the required fields"

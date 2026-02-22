@@ -40,6 +40,7 @@ module.exports = {
     GET_DATACENTER_LAB_CREDS_TOUSER:`SELECT * FROM datacenter_lab_user_credentials WHERE labid=$1 AND assigned_to=$2`,
     GET_DATACENTER_LAB_CREDS_ONLABID:`SELECT * FROM datacenter_lab_user_credentials WHERE labid=$1 AND orgassigned is NULL AND admin_id is NULL`,
 
+    UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS:`UPDATE vmclusterdatacenteruserassignment set status=$1 where labid=$2 and user_id=$3 RETURNING *`,
     UPDATE_SINGLEVM_AWS_CONTENT:`UPDATE createlab SET title=$1,description=$2,cpu=$3,ram=$4,os=$5,provider=$6,instance=$7,software=$8,labguide=$9,userguide=$10,enddate=$11 WHERE lab_id=$12 RETURNING *`,
     UPDATE_SINGLEVM_DATACENTER:`UPDATE singlevmdatacenter_lab SET  software=$1, cataloguetype=$2,cataloguename=$4,level=$5,category=$6,price=$7 where lab_id=$3 RETURNING *`,
     UPDATE_SINGLEVM_DATACENTER_CONTENT:`UPDATE singlevmdatacenter_lab SET title=$1,description=$2,startdate=$3,enddate=$4,labguide=$5,userguide=$6,software=$7 where lab_id=$8 RETURNING *`,

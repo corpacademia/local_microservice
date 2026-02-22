@@ -986,7 +986,7 @@ const getAllLabsFromUserAssignment = async (userId) => {
 //GET THE LAB IDS OF USER ASSIGNMENT 
 const getAllLabDetailsForOrgAssignment = async(orgId,adminId)=>{
     try {
-        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT,[orgId,adminId]);
+        const result = await pool.query(cloudSliceAwsQueries.GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENTS,[orgId]);
         if (!result.rows.length) {
             throw new Error('No lab found with this id');
         }

@@ -361,6 +361,7 @@ const loginService = async (email, password) => {
 const userApprove = async(userId,admin,status)=>{
   try {
     const updateApproveStatus = await pool.query(userQueries.updateUserApproval,[status,admin.id,userId]);
+    console.log(updateApproveStatus)
     return updateApproveStatus;
   } catch (error) {
     throw error;
@@ -499,28 +500,30 @@ try {
       let result;
       await pool.query("BEGIN");
       //  Insert into DB
-      if(role === 'user'){
+      if(user?.role === 'user' || role === 'user'){
          result = await pool.query(userQueries.addToOrg, [
         name,
         email,
         hashedPassword,
-        role,
+        user?.role || role,
         orgName,
         orgType,
         orgId,
         id,
+        'inactive'
       ]);
       }
       else{
-         result = await pool.query(userQueries.addUser, [
+         result = await pool.query(userQueries.addUsers, [
         name,
         email,
         hashedPassword,
-        role,
+        user?.role || role,
         orgName,
         orgType,
         orgId,
         id,
+        'inactive'
       ]);
       }
       
@@ -790,7 +793,7 @@ const addOrganizationUser = async (userData) => {
   await pool.query('BEGIN');
   // 2. Insert into database
   let result;
-  if (role === 'user' ){
+  if (role === 'user' || role === 'trainer' ){
     result = await pool.query(userQueries.ADD_ORG_USER, [
     name,
     email,

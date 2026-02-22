@@ -20,10 +20,12 @@ module.exports = {
 
     getAllUsers: `SELECT * FROM users`,
     getAllOrgUsers: `SELECT * FROM organization_users`,
+    addUsers: `INSERT INTO users (name, email, password, role, organization,organization_type,org_id, created_by,status) 
+              VALUES ($1, $2, $3, $4, $5, $6,$7,$8,$9) RETURNING *`,
     addUser: `INSERT INTO users (name, email, password, role, organization,organization_type,org_id, created_by) 
               VALUES ($1, $2, $3, $4, $5, $6,$7,$8) RETURNING *`,
-    addToOrg:`INSERT INTO organization_users (name, email, password, role, organization,organization_type,org_id, admin_id) 
-              VALUES ($1, $2, $3, $4, $5, $6,$7,$8) RETURNING *`,
+    addToOrg:`INSERT INTO organization_users (name, email, password, role, organization,organization_type,org_id, admin_id,status) 
+              VALUES ($1, $2, $3, $4, $5, $6,$7,$8,$9) RETURNING *`,
     getUserById: 'SELECT * FROM users WHERE id = $1',
     getOrgUserById: 'SELECT * FROM organization_users WHERE id = $1',
     getUserStats: 'SELECT * FROM UserStats WHERE UserId = $1',
@@ -39,7 +41,21 @@ module.exports = {
     updateUserProfileWithNoPasswordOrg: `UPDATE organization_users SET name = $1, email = $2, phone = $3, location = $4 ,profilephoto = $5 WHERE id = $6 RETURNING *`,
     updateOrgUserPassword:`UPDATE organization_users set password=$1 where email=$2 RETURNING *`,
     // updateUserProfileNoProfilePhotoOrg: `UPDATE organization_users SET name = $1, email = $2, password=$3, phone = $4, location = $5 WHERE id = $6 RETURNING *`,
-    updateUserApproval:`UPDATE organization_users set status=$1,approved_at=NOW(),approved_by=$2 where id=$3 RETURNING *`,
+    updateUserApproval:`WITH updated_org AS (
+    UPDATE organization_users
+    SET status = $1,
+        approved_at = NOW(),
+        approved_by = $2
+    WHERE id = $3
+    RETURNING *
+    )
+    UPDATE users
+    SET status = $1,
+        approved_at = NOW(),
+        approved_by = $2
+    WHERE id = $3
+    AND NOT EXISTS (SELECT 1 FROM updated_org)
+    RETURNING *;`,
     UPDATE_ORGANIZATION_ADMIN:`UPDATE organizations set org_admin=$1 where id=$2 RETURNING *`,
 
     ADD_ORG_USER: `INSERT INTO organization_users(name, email, password, role, admin_id,organization,org_id,organization_type) VALUES($1, $2, $3, $4, $5,$6,$7,$8) RETURNING *`,

@@ -59,7 +59,8 @@ const { createLab,
     updateSingleVMAwsLab,
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
-    getAllOrganizationAssignedLabs
+    getAllOrganizationAssignedLabs,
+    updateUserLabCompletedStatus
 } = require('../controllers/labController');
 
 const {
@@ -73,13 +74,14 @@ const {
   getTransactionDetails,
   exportTransactions,
   userTransactions,
-  insertFreeLab
+  insertFreeLab,
+  
 } = require('../controllers/labCartController');
 
 const {
   getNotificationsOfUser,
   markAsRead,
-  markAllAsRead,
+  markAllAsRead,  
   deleteNotifications,
   setUserNotificationSettings,
   getUserNotificationSettings
@@ -192,7 +194,8 @@ router.get('/notifications/preferences/:userId',getUserNotificationSettings);
 router.post('/enroll',insertFreeLab);
 router.post('/getAllUserPurchasedLabs',getAllUserPurchasedLabs);
 router.get('/getOrgAssignedLabs/:orgId',getAllOrganizationAssignedLabs);
-router.get('/getAllLabs',getAllLabs)
+router.get('/getAllLabs',getAllLabs);
+router.post('/updateUserLabCompletedStatus',updateUserLabCompletedStatus)
 
 
 module.exports = router;

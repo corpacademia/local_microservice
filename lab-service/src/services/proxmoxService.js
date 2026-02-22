@@ -752,11 +752,27 @@ const createUserVm = async (req,res)=>{
  const upid = cloneResp.data.data;
 
 // Poll task until finished
-  while (true) {
-    const task = await api.get(`/nodes/${node}/tasks/${upid}/status`);
-    if (task.data.data.status === "stopped") break;
-    await new Promise(r => setTimeout(r, 2000));
-  }
+  // while (true) {
+  //   const task = await api.get(`/nodes/${node}/tasks/${upid}/status`);
+  //   if (task.data.data.status === "stopped") break;
+  //   await new Promise(r => setTimeout(r, 2000));
+  // }
+  let taskStatus;
+
+while (true) {
+  const task = await api.get(`/nodes/${node}/tasks/${upid}/status`);
+  taskStatus = task.data.data;
+
+  if (taskStatus.status === "stopped") break;
+
+  await new Promise(r => setTimeout(r, 2000));
+}
+
+//  CHECK IF CLONE FAILED
+if (taskStatus.exitstatus !== "OK") {
+  throw new Error(`VM Clone failed: ${taskStatus.exitstatus}`);
+}
+
 
    if(type === 'user' && purchased){
       await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED,[true,labid,vmid,duration]);
@@ -979,8 +995,9 @@ const startVM = async (req, res) => {
        await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[true,vmDetailsId,true])
      }
      else{
-       await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_RUNNING,[true,lab_id,userid])
+       await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_RUNNINGSTATUS,[true,lab_id,userid,'started'])
      }
+     
     const hostname = await getVmIP(node,vmid);
     const osInfo = await detectOSFromProxmox(node, vmid);
     const os = osInfo?.os ?? null;

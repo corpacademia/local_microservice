@@ -2,14 +2,15 @@
 module.exports ={
     CREATE_BATCH :`INSERT INTO batches(name,description,created_by,startdate,enddate) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
     CREATE_BATCH_USER:`INSERT INTO batch_users(batch_id,user_id) VALUES ($1,$2) RETURNING *`,
-    CREATE_BATCH_LAB:`INSERT INTO batchlabs (lab_id,lab_name,start_date,end_date,remaining_days,trainer_id,trainer_name,updated_at,batch_id,assigned_by,total_users)
-    VALUES ( $1, $2,$3,$4,EXTRACT(DAY FROM ($4::timestamp  - $3::timestamp)),$5,$6,NOW(),$7,$8,$9)RETURNING *`,
+    CREATE_BATCH_LAB:`INSERT INTO batchlabs (lab_id,lab_name,start_date,end_date,remaining_days,trainer_id,trainer_name,updated_at,batch_id,assigned_by)
+    VALUES ( $1, $2,$3,$4,EXTRACT(DAY FROM ($4::timestamp  - $3::timestamp)),$5,$6,NOW(),$7,$8)RETURNING *`,
     INSERT_INTO_USERASSIGNMENT:`INSERT INTO vmclusterdatacenteruserassignment(labid,user_id,assigned_by,startdate,enddate,group_creds_id,assigned_at,assignment_type,batch_id) VALUES($1,$2,$3,$4,$5,$6,NOW(),$7,$8) RETURNING *`,
 
     GET_USER_NOTIFICATION_SETTINGS:`SELECT * FROM user_notification_settings WHERE user_id = $1`,
     INSERT_NOTIFICATION:`INSERT INTO notifications (type,title,message,priority,user_id,metadata) values($1,$2,$3,$4,$5,$6) RETURNING *`,
 
-    GET_BATCHES:`SELECT * FROM batches WHERE created_by=$1`,
+    GET_BATCHES_SUPERADMIN:`SELECT * FROM batches`,
+    GET_BATCHES:`SELECT * FROM batches WHERE created_by=ANY($1)`,
     GET_ALL_BATCHES:`SELECT * FROM batches`,
     GET_BATCH:`SELECT * FROM batches WHERE id=$1`,
     GET_BATCH_USERS:`SELECT 
@@ -50,7 +51,101 @@ module.exports ={
     // SELECT labid AS lab_id,title,user_id,startdate AS start_date,enddate AS end_date, 'vmcluster-datacenter' AS type
     // FROM vmclusterdatacenter_lab WHERe user_id = $1
     // `,
-    GET_ALL_LABS_FOR_BATCH: `
+//     GET_ALL_LABS_FOR_BATCH: `
+//   /* ---------- Single VM AWS ---------- */
+//   SELECT
+//     cl.lab_id,
+//     cl.title,
+//     cl.user_id,
+//     NULL AS start_date,
+//     cl.enddate AS end_date,
+//     'singlevm-aws' AS type
+//   FROM createlab cl
+//   WHERE
+//     cl.user_id = $1
+//     OR cl.lab_id IN (
+//       SELECT lab_id
+//       FROM lab_batch
+//       WHERE org_id = $2
+//     )
+
+//   UNION
+
+//   /* ---------- Cloudslice ---------- */
+//   SELECT
+//     csl.labid AS lab_id,
+//     csl.title,
+//     csl.createdby AS user_id,
+//     csl.startdate AS start_date,
+//     csl.enddate AS end_date,
+//     'cloudslice' AS type
+//   FROM cloudslicelab csl
+//   WHERE
+//     csl.createdby = $1
+//     OR csl.labid IN (
+//       SELECT labid
+//       FROM cloudsliceorgassignment
+//       WHERE orgid = $2
+//     )
+
+//   UNION
+
+//   /* ---------- Single VM Proxmox ---------- */
+//   SELECT
+//     sp.labid AS lab_id,
+//     sp.title,
+//     sp.user_id,
+//     sp.startdate AS start_date,
+//     sp.enddate AS end_date,
+//     'singlevm-proxmox' AS type
+//   FROM singlevmproxmox_lab sp
+//   WHERE
+//     sp.user_id = $1
+//     OR sp.labid IN (
+//       SELECT labid
+//       FROM singlevmproxmoxorgassignment
+//       WHERE orgid = $2
+//     )
+
+//   UNION
+
+//   /* ---------- Single VM Datacenter ---------- */
+//   SELECT
+//     sd.lab_id,
+//     sd.title,
+//     sd.user_id,
+//     sd.startdate AS start_date,
+//     sd.enddate AS end_date,
+//     'singlevm-datacenter' AS type
+//   FROM singlevmdatacenter_lab sd
+//   WHERE
+//     sd.user_id = $1
+//     OR sd.lab_id IN (
+//       SELECT labid
+//       FROM singlevmdatacenterorgassignment
+//       WHERE orgid = $2
+//     )
+
+//   UNION
+
+//   /* ---------- VM Cluster Datacenter ---------- */
+//   SELECT
+//     vc.labid AS lab_id,
+//     vc.title,
+//     vc.user_id,
+//     vc.startdate AS start_date,
+//     vc.enddate AS end_date,
+//     'vmcluster-datacenter' AS type
+//   FROM vmclusterdatacenter_lab vc
+//   WHERE
+//     vc.user_id = $1
+//     OR vc.labid IN (
+//       SELECT labid
+//       FROM vmclusterdatacenterorgassignment
+//       WHERE orgid = $2
+//     )
+// `,
+   GET_ALL_LABS_FOR_BATCH: `
   /* ---------- Single VM AWS ---------- */
   SELECT
     cl.lab_id,
@@ -61,11 +156,10 @@ module.exports ={
     'singlevm-aws' AS type
   FROM createlab cl
   WHERE
-    cl.user_id = $1
+    $3 = true
+    OR cl.user_id = $1
     OR cl.lab_id IN (
-      SELECT lab_id
-      FROM lab_batch
-      WHERE org_id = $2
+      SELECT lab_id FROM lab_batch WHERE org_id = $2
     )
 
   UNION
@@ -80,11 +174,10 @@ module.exports ={
     'cloudslice' AS type
   FROM cloudslicelab csl
   WHERE
-    csl.createdby = $1
+    $3 = true
+    OR csl.createdby = $1
     OR csl.labid IN (
-      SELECT labid
-      FROM cloudsliceorgassignment
-      WHERE orgid = $2
+      SELECT labid FROM cloudsliceorgassignment WHERE orgid = $2
     )
 
   UNION
@@ -99,11 +192,10 @@ module.exports ={
     'singlevm-proxmox' AS type
   FROM singlevmproxmox_lab sp
   WHERE
-    sp.user_id = $1
+    $3 = true
+    OR sp.user_id = $1
     OR sp.labid IN (
-      SELECT labid
-      FROM singlevmproxmoxorgassignment
-      WHERE orgid = $2
+      SELECT labid FROM singlevmproxmoxorgassignment WHERE orgid = $2
     )
 
   UNION
@@ -118,11 +210,10 @@ module.exports ={
     'singlevm-datacenter' AS type
   FROM singlevmdatacenter_lab sd
   WHERE
-    sd.user_id = $1
+    $3 = true
+    OR sd.user_id = $1
     OR sd.lab_id IN (
-      SELECT labid
-      FROM singlevmdatacenterorgassignment
-      WHERE orgid = $2
+      SELECT labid FROM singlevmdatacenterorgassignment WHERE orgid = $2
     )
 
   UNION
@@ -137,13 +228,13 @@ module.exports ={
     'vmcluster-datacenter' AS type
   FROM vmclusterdatacenter_lab vc
   WHERE
-    vc.user_id = $1
+    $3 = true
+    OR vc.user_id = $1
     OR vc.labid IN (
-      SELECT labid
-      FROM vmclusterdatacenterorgassignment
-      WHERE orgid = $2
+      SELECT labid FROM vmclusterdatacenterorgassignment WHERE orgid = $2
     )
 `,
+
     GET_LAB_DETAILS_BATCH: `
     SELECT 
         lab_id::uuid AS lab_id,
@@ -213,11 +304,13 @@ module.exports ={
 
     UPDATE_BATCH_DETAILS:`UPDATE  batches set name=$1,description=$2,startdate=$3,enddate=$4 where id=$5 RETURNING *`,
     UPDATE_LAB_BATCH:`UPDATE batchlabs set lab_id=$1,lab_name=$2,start_date=$3,end_date=$4 ,remaining_days=$5,trainer_id=$6,trainer_name=$7 WHERE lab_id=$8 RETURNING *`,
-    UPDATE_BATCH_USERS_TLAB:`UPDATE batch_users SET total_labs =GREATEST(COALESCE(total_labs, 0) + $1, 0) WHERE batch_id = $2;`,
+    UPDATE_BATCH_USERS_TLAB:`UPDATE batch_users SET total_labs =GREATEST(COALESCE(total_labs, 0) + $1, 0) WHERE batch_id = $2 AND user_id=$3;`,
     UPDATE_BATCH_USERS_TLAB_STARTED:`UPDATE batchlabs SET total_users =GREATEST(COALESCE(total_users, 0) + $1, 0) WHERE batch_id = $2 AND lab_id=$3;`,
+    UPDATE_BATCH_USERS_TLAB_COMPLETED:`UPDATE batchlabs SET users_completed =GREATEST(COALESCE(users_completed, 0) + $1, 0) WHERE batch_id = $2 AND lab_id=$3;`,
     UPDATE_BATCH_USER_TLAB:`UPDATE batch_users SET total_labs = GREATEST(COALESCE(total_labs, 0) + $1, 0) WHERE user_id = $2;`,
     UPDATE_BATCHLAB_COUNT:`UPDATE batches SET lab_count =GREATEST(COALESCE(lab_count, 0) + $1, 0) WHERE id=$2`,
     UPDATE_BATCHLAB_USER_COUNT:`UPDATE batch_users set labs_started = GREATEST(COALESCE(labs_started, 0) + $1, 0) WHERE batch_id=$2 and user_id=$3 RETURNING *`,
+    UPDATE_BATCHLAB_COMPLETED_USER_COUNT:`UPDATE batch_users set labs_completed = GREATEST(COALESCE(labs_completed, 0) + $1, 0) WHERE batch_id=$2 and user_id=$3 RETURNING *`,
     UPDATE_BATCH_USER_TSTARTED:`UPDATE batchlabs set users_started=users_started + $1 WHERE lab_id=$2 AND batch_id=$3 RETURNING *`,
     UPDATE_USER_COUNT:`UPDATE batches
     SET user_count = GREATEST(user_count + $1, 0)
@@ -282,7 +375,10 @@ module.exports ={
         SELECT id 
         FROM user_credential_groups 
         WHERE userassigned IS NULL 
-            AND orgassigned = $3 
+            AND (
+          orgassigned IS NULL
+          OR orgassigned = $3
+        )
             AND labid = $2 
         LIMIT 1
         )

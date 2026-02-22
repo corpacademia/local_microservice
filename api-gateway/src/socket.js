@@ -20,7 +20,7 @@ export const initSocket = (server) => {
     console.error("Redis Sub Error:", err);
   });
 
-  // 🔔 Subscribe to notification channel
+  //  Subscribe to notification channel
   subscriber.subscribe("notification");
 
   subscriber.on("message", (channel, message) => {
@@ -31,7 +31,7 @@ export const initSocket = (server) => {
 
         // Forward to socket.io room
         io.to(`user_${userId}`).emit("notification", notification);
-        console.log(`🔔 Emitted notification to user_${userId}:`);
+        console.log(` Emitted notification to user_${userId}:`);
       } catch (err) {
         console.error("Failed to parse notification:", err);
       }
@@ -43,11 +43,11 @@ export const initSocket = (server) => {
 
     socket.on("join_rooms", ({ userId, orgId }) => {
       socket.join(`user_${userId}`);
-      console.log(`✅ ${socket.id} joined user_${userId}`);
+      console.log(` ${socket.id} joined user_${userId}`);
 
       if (orgId) {
         socket.join(`org_${orgId}`);
-        console.log(`✅ ${socket.id} joined org_${orgId}`);
+        console.log(` ${socket.id} joined org_${orgId}`);
       }
     });
 

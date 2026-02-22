@@ -21,7 +21,7 @@ const {
 
 //routes
 router.post('/createBatch',createBatch);
-router.get('/getBatches/:userId',getBatches);
+router.post('/getBatches',getBatches);
 router.delete('/deleteBatch/:batchId',deleteBatch);
 router.get('/getBatch/:batchId',getBatch);
 router.post('/addUsersToBatch',addUsersToBatch);

@@ -9,6 +9,8 @@ const { randomBytes } = require('crypto');
 const { getUserEmail, markEmailAsSent, isWithinQuietHours, nowInTz, emailPlacehoders } = require('./emailNotificationService');
 const { sendNotificationToMail } = require('./notificationServices');
 const { sendNotification } = require('../socket');
+const batchesQueries = require('./batchesQueries');
+const promoxQueries = require('./promoxQueries');
 
 
 
@@ -311,8 +313,6 @@ const updateCatalogueDetails = async (
     throw new Error(error.message);
   }
 };
-
-
 
 //update single vm user cred running state
 const  updateSingleVMDatacenterUserCredRunningState = async (isrunning, User, labId) => {
@@ -855,6 +855,60 @@ const updateLabConfig = async (lab_id, admin_id, config_details) => {
     const result = await pool.query(queries.UPDATE_LAB_CONFIG, [lab_id, admin_id, config_details]);
     return result.rows[0]; // Return the result to the controller
 };
+//updateCompleted status of user lab
+const updateUserLabCompletedStatus = async(userLab)=>{
+    try {
+        await pool.query('BEGIN');
+        const labId = userLab?.labid || userLab?.lab_id
+        let result;
+        if(userLab?.type === 'single-vm'){
+            if(userLab?.purchased){
+                result = await pool.query(labQueries.UPDATE_USER_SINGLEvM_AWS_PURCHASED_STATUS,['completed',userLab?.lab_id,userLab?.user_id]);
+            }
+            else{
+            result = await pool.query(labQueries.UPDATE_USER_SINGLEvM_AWS_STATUS,['completed',userLab?.lab_id,userLab?.user_id]);
+           
+            }
+        }
+        else if(userLab?.type === 'singlevm-proxmox'){
+            if(userLab?.purchased){
+                result = await pool.query(promoxQueries.UPDATE_USERLAB_PURCHASED_COMPLETE_STATUS,['completed',userLab?.labid,userLab?.user_id]);
+            }
+            else{
+                result = await pool.query(promoxQueries.UPDATE_USERLAB_COMPLETE_STATUS,['completed',userLab?.labid,userLab?.user_id])
+            }
+        }
+        else if (userLab?.type === 'singlevm-datacenter'){
+            if(userLab?.purchased){}
+            else{
+                result = await pool.query(labQueries.UPDATE_SINGLEVM_DATACENTER_USER_STATUSS,['completed',userLab?.user_id,userLab?.labid]);
+            }
+        }
+        else if(userLab?.type === 'vm-cluster'){
+            if(userLab?.purchased){}
+            else{
+               result =  await pool.query(labQueries.UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS,['completed',labId,userLab?.user_id])
+            }
+        }
+          console.log('result:',result.rows)
+         if (!result?.rowCount) {
+            await pool.query('ROLLBACK');
+            return; // prevents double increment
+        }
+     
+         if(userLab?.batch_id){
+              
+               await pool.query(batchesQueries.UPDATE_BATCHLAB_COMPLETED_USER_COUNT,[1,userLab.batch_id,userLab.user_id]);
+               await pool.query(batchesQueries.UPDATE_BATCH_USERS_TLAB_COMPLETED,[1,userLab?.batch_id,labId]);
+               
+            }
+        await pool.query('COMMIT');
+        return ;
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        throw new Error("Error updating the userlab status:",error);
+    }
+}
 
 const updateSingleVMAws =  async(catalogueName,
   numberOfDays,
@@ -1242,5 +1296,6 @@ module.exports = {
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
     getAllOrganizationAssignedLabs,
-    getAllLabs
+    getAllLabs,
+    updateUserLabCompletedStatus
 }

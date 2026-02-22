@@ -1317,6 +1317,31 @@ const getAwsInstanceDetails = async (req, res) => {
     }
 };
 
+const updateUserLabCompletedStatus = async(req,res)=>{
+    try {
+        const {userLab} = req.body;
+        if(!userLab){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide the required data"
+            })
+        }
+        const update = await labService.updateUserLabCompletedStatus(userLab);
+        return res.status(200).send({
+            success:true,
+            messsage:"Successfully updated the status"
+        })
+
+    } catch (error) {
+        console.log("Error:",error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
+
 const getAwsInstanceDetailsOfUsers = async (req, res) => {
     try {
         const { lab_id, user_id } = req.body;
@@ -1799,5 +1824,6 @@ module.exports = {
     getAllUserPurchasedLabs,
     getAllOrganizationAssignedLabs,
     getAllLabs,
-    getLabsOfLabadmins
+    getLabsOfLabadmins,
+    updateUserLabCompletedStatus
 }

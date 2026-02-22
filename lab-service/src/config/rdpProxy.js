@@ -5,10 +5,14 @@
 const net = require("net");
 const { WebSocketServer, WebSocket } = require("ws");
 const { consumeToken } = require("./tokenStore");
+const fs = require('fs');
 require('dotenv').config()
 
 const GUACD_HOST = process.env.GUACD_HOST || "127.0.0.1";
 const GUACD_PORT = parseInt(process.env.GUACD_PORT || "4822", 10);
+const PEM_FILE_PATH = process.env.PEM_FILE_PATH;
+
+const privateKey = fs.readFileSync(PEM_FILE_PATH, 'utf8');
 
 /**
  * Setup RDP proxy on provided HTTP server.
@@ -165,36 +169,114 @@ function setupRDPProxy(httpServer) {
   return wss;
 }
 
+// function buildConnectInstruction(connectionInfo, argNames) {
+//   // map arg name -> value
+//   const map = {
+//     hostname: connectionInfo.hostname,
+//     port: String(connectionInfo.port),
+//     username: connectionInfo.username || "",
+//     password: connectionInfo.password || "",
+//     width: "1024",
+//     height: "768",
+//     dpi: "96",
+//     security: "any",
+//     "ignore-cert": "true",
+//     "server-layout": "",
+//     timezone: "",
+//     console: "true",
+//     "disable-audio": "",
+//     "enable-audio-input": "",
+//     "enable-printing": "",
+//     "enable-drive": "",
+//     "drive-path": "",
+//     "create-drive-path": "",
+//     "static-channels": "",
+//   };
+
+//   const parts = argNames.map((name) => {
+//     const val = (map[name] !== undefined && map[name] !== null) ? String(map[name]) : "";
+//     return `${val.length}.${val}`;
+//   });
+
+//   return `7.connect,${parts.join(",")};`;
+// }
+
 function buildConnectInstruction(connectionInfo, argNames) {
-  // map arg name -> value
-  const map = {
+  const protocol = (connectionInfo.protocol || "rdp").toLowerCase();
+
+  // Base arguments (common for all protocols)
+  const baseMap = {
     hostname: connectionInfo.hostname,
     port: String(connectionInfo.port),
     username: connectionInfo.username || "",
-    password: connectionInfo.password || "",
+  };
+
+  // If SSH and private key is provided → use key auth
+  const isSSHKeyAuth =
+    protocol === "ssh" && privateKey;
+
+  // Authentication handling
+  const authMap = isSSHKeyAuth
+    ? {
+        password: "", // MUST be empty when using private key
+        "private-key": privateKey,
+        passphrase: connectionInfo.passphrase || "",
+      }
+    : {
+        password: connectionInfo.password || "",
+      };
+
+  // RDP defaults
+  const rdpDefaults = {
     width: "1024",
     height: "768",
     dpi: "96",
     security: "any",
     "ignore-cert": "true",
-    "server-layout": "",
-    timezone: "",
     console: "true",
-    "disable-audio": "",
-    "enable-audio-input": "",
-    "enable-printing": "",
-    "enable-drive": "",
-    "drive-path": "",
-    "create-drive-path": "",
-    "static-channels": "",
   };
 
+  // SSH defaults
+  const sshDefaults = {
+    "color-scheme": "green-black",
+    "font-size": "12",
+    scrollback: "1000",
+    "server-alive-interval": "30",
+  };
+
+  // VNC defaults
+  const vncDefaults = {
+    width: "1024",
+    height: "768",
+    dpi: "96",
+    cursor: "local",
+  };
+
+  let protocolDefaults = {};
+
+  if (protocol === "rdp") protocolDefaults = rdpDefaults;
+  if (protocol === "ssh") protocolDefaults = sshDefaults;
+  if (protocol === "vnc") protocolDefaults = vncDefaults;
+
+  // Merge everything
+  const finalMap = {
+    ...baseMap,
+    ...authMap,
+    ...protocolDefaults,
+    ...(connectionInfo.extraArgs || {}),
+  };
+
+  // Build instruction in requested order
   const parts = argNames.map((name) => {
-    const val = (map[name] !== undefined && map[name] !== null) ? String(map[name]) : "";
+    const val =
+      finalMap[name] !== undefined && finalMap[name] !== null
+        ? String(finalMap[name])
+        : "";
     return `${val.length}.${val}`;
   });
 
   return `7.connect,${parts.join(",")};`;
 }
+
 
 module.exports = { setupRDPProxy };

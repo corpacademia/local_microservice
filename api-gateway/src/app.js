@@ -40,6 +40,14 @@ if (!fs.existsSync(uploadsDir)) {
 // Serve static files from uploads folder
 app.use('/uploads', express.static(path.join(__dirname, 'src/public/uploads')));
 
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    uptime: process.uptime(),
+    timestamp: Date.now()
+  });
+});
+
 // Route mounting
 app.use('/api/v1/user_ms', require('./routes/user'));
 app.use('/api/v1/lab_ms', require('./routes/lab'));

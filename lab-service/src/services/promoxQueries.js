@@ -34,6 +34,8 @@ module.exports = {
     UPDATE_LAUNCH:`UPDATE PROXMOX_VM_DETAILS SET islaunched=$1,vmid=$4 where node=$2 and labid=$3 RETURNING *`,
     UPDATE_LAUNCH_LOADING:`UPDATE PROXMOX_VM_DETAILS SET isloading=$1 ,isrunning = $3 where vmdetails_id=$2 RETURNING *`,
    
+    UPDATE_USERLAB_COMPLETE_STATUS:`UPDATE singlevmproxmoxuserassignment SET status=$1 WHERE labid=$2 AND user_id=$3 RETURNING *`,
+    UPDATE_USERLAB_PURCHASED_COMPLETE_STATUS:`UPDATE singlevmproxmox_purchased_labs SET status=$1 WHERE labid=$2 AND user_id=$3 RETURNING *`,
     UPDATE_LAUNCH_ORG_LOADING:`UPDATE singlevmproxmoxorgassignment SET isprocessing=$1,isrunning=$4 where labid=$2 and user_id=$3`,
     UPDATE_LAUNCH_ORG:`UPDATE singlevmproxmoxorgassignment SET islaunched=$1,vmid=$3 where  labid=$2 and user_id=$4 RETURNING *`,
     UPDATE_LAUNCH_USER:`UPDATE singlevmproxmoxuserassignment SET islaunched=$1 , vmid=$3,node=$5 where  labid=$2 and user_id=$4 RETURNING *`,
@@ -43,6 +45,7 @@ module.exports = {
     UPDATE_LAUNCH_USER_PURCHASED_LOADING:`UPDATE singlevmproxmox_purchased_labs SET isloading=$1 where user_id=$3  AND labid=$2 RETURNING *`,
     UPDATE_LAUNCH_USER_PURCHASED_RUNNING:`UPDATE singlevmproxmox_purchased_labs SET isrunning=$1 where user_id=$3 AND  labid=$2 RETURNING *`,
     UPDATE_LAUNCH_USER_RUNNING:`UPDATE singlevmproxmoxuserassignment SET isrunning=$1 where user_id=$3 AND  labid=$2 RETURNING *`,
+    UPDATE_LAUNCH_USER_RUNNINGSTATUS:`UPDATE singlevmproxmoxuserassignment SET isrunning=$1 , status=$4 where user_id=$3 AND  labid=$2 RETURNING *`,
    
 
     UPDATE_LAB_DETAILS:`UPDATE singlevmproxmox_lab set title=$1,description=$2,startdate=$3,enddate=$4 where labid=$5`,

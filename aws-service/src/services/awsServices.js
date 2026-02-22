@@ -449,6 +449,7 @@ const handleLaunchSoftwareOrStopService = async (osName, instanceId, hostname, p
       throw new Error(`Could not Launch or Stop software: ${error.message}`);
   }
 };
+
 const executeDecryptPasswordScript = (labId, publicIp, instanceId) => {
   return new Promise((resolve, reject) => {
     const scriptPath = path.resolve(__dirname, "../terraformScripts/decrypt_password.py");
@@ -485,7 +486,6 @@ const executeDecryptPasswordScript = (labId, publicIp, instanceId) => {
   });
 };
 
-
 const getDecryptPasswordFromCloudService = async (labId, publicIp, instanceId) => {
   try {
     // Execute the decrypt password script
@@ -505,7 +505,6 @@ const getDecryptPasswordFromCloudService = async (labId, publicIp, instanceId) =
     };
   }
 };
-
 
 const executeGenerateNewIpScript = (instanceId) => {
   return new Promise((resolve, reject) => {

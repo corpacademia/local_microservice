@@ -84,18 +84,26 @@ const createBatch = async(req,res)=>{
 //get batches
 const getBatches = async(req,res)=>{
     try {
-        const {userId} = req.params;
-        if(!userId){
+        let {userIds,role} = req.body;
+        userIds = Array.isArray(userIds) ? userIds : [userIds];
+        if(!userIds || !role){
             return res.status(400).send({
                 success:false,
                 message:"Please provide required fields"
             })
         }
-        const getBatches = await pool.query(batchQueries.GET_BATCHES,[userId]);
+        let getBatches;
+        if(role === 'superadmin'){
+           getBatches = await pool.query(batchQueries.GET_BATCHES_SUPERADMIN);
+        }
+        else{
+          getBatches = await pool.query(batchQueries.GET_BATCHES,[userIds]);
+        }
         if(!getBatches.rows.length){
-            return res.status(404).send({
-                success:false,
-                message:"Could not fetch the batches"
+            return res.status(200).send({
+                success:true,
+                message:"Could not fetch the batches",
+                data:[]
             })
         }
         return res.status(200).send({
@@ -412,7 +420,6 @@ const addLabsToBatch = async (req, res) => {
       trainer_name,
       batch_id,
       assigned_by,
-      users.length
     ]);
 
     if (!addLab.rows.length) throw new Error("Could not add lab to batch");
@@ -543,12 +550,15 @@ const addLabsToBatch = async (req, res) => {
       else if (type === 'cloudslice'){
         await assignCloudsliceLab(lab_id, user.user_id, assigned_by, start_date, end_date,sessionToken,batch_id)
       }
+
+      await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB, [1, batch_id,user?.user_id]);
+      await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batch_id,lab_id]);
     }
 
     // Update batch counters
     await pool.query(batchQueries.UPDATE_BATCHLAB_COUNT, [1, batch_id]);
-    await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB, [1, batch_id]);
-    await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batch_id,lab_id])
+    // await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB, [1, batch_id]);
+    // await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batch_id,lab_id])
 
     await pool.query('COMMIT');
 
@@ -604,14 +614,16 @@ const getBatchLabs = async(req,res)=>{
 //get labs for batches
 const getLabsForBatch = async (req,res)=>{
     try {
-         const {userId,orgId} = req.body;
-    if(!userId || !orgId){
+         const {userId,orgId,role} = req.body;
+         console.log(req.body)
+    if(!userId  || !role){
         return res.status(400).send({
             success:false,
-            message:"Please provide the batch id"
+            message:"Please provide the required fields"
         })
     }
-    const getLabs = await pool.query(batchQueries.GET_ALL_LABS_FOR_BATCH,[userId,orgId]);
+    const isBoolean = role === 'superadmin';
+    const getLabs = await pool.query(batchQueries.GET_ALL_LABS_FOR_BATCH,[userId,orgId,isBoolean]);
     if(!getLabs.rows.length){
         return res.status(200).send({
             success:false,
@@ -753,8 +765,8 @@ const updateBatchLab = async (req, res) => {
 //update user batch labs
 const updateUserBatchLabs = async(req,res)=>{
   try {
-    const {userId,batchId} = req.body;
-    if(!userId || !batchId){
+    const {userId,batchId,labId} = req.body;
+    if(!userId || !batchId || !labId){
       return res.status(400).send({
         success:false,
         message:"Please provide the required fields"
@@ -866,6 +878,9 @@ const deleteUserAndItsLabs = async (req, res) => {
         client.query(batchQueries.DELETE_RANDOM_USER_CREDS, [labId, userId,"batch", batchId]),
         client.query(batchQueries.DELETE_USER_DATACENTER_LAB, [labId, userId, "batch", batchId]),
       ]);
+
+      //delete user count in batchlabs
+      await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[-1,batchId,labId])
     }
 
     // 3️⃣ Update user count ONCE
@@ -1227,9 +1242,13 @@ const deleteLabFromBatch = async(req,res)=>{
              await pool.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[labId,user.user_id,'batch',batchId]);
              await pool.query(batchQueries.DELETE_RANDOM_USER_CREDS,[labId,user.user_id,'batch',batchId]);
              await pool.query(batchQueries.DELETE_USER_DATACENTER_LAB,[labId,user.user_id,'batch',batchId]);
+
+             await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB,[-1,batchId,user?.user_id]);
+             await pool.query(batchQueries.UPDATE_BATCHLAB_COMPLETED_USER_COUNT,[-1,batchId,user?.user_id]);
+             await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_COMPLETED,[-1,batchId,labId]);
         }
         await pool.query(batchQueries.UPDATE_BATCHLAB_COUNT,[-1,batchId]);
-        await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB,[-1,batchId]);
+        // await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB,[-1,batchId]);
         await pool.query("COMMIT")
         return res.status(200).send({
             success:true,
