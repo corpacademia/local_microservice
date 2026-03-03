@@ -18,6 +18,9 @@ const Instamojo = require('../utility/instamojo')
 require('dotenv').config;
 
 const api = require('../config/proxmoxApi');
+const purchaseQueries = require('../services/purchaseQueries');
+const { createTheExtensionRequest } = require('../services/purchaseService');
+const labCartQueries = require('../services/labCartQueries');
 
 // // normalize in case it's wrapped in .default
 // if (autoTable.default) {
@@ -43,6 +46,17 @@ const getUserData = async(userId,sessionToken)=>{
   } catch (error) {
     throw error
   }
+}
+const getUsersData = async(userId)=>{
+  if(!userId) throw new Error("Please provide the userid")
+  let user;
+   user = await pool.query(labCartQueries.GET_USER_DATA,[userId]);
+   if(!user.rows.length){
+    user = await pool.query(labCartQueries.GET_ORG_USER_DATA,[userId]);
+    if(!user.rows.lenght) throw new Error("User not found")
+    return user.rows[0]
+   }
+   return user.rows[0]
 }
 //create a new cart item
 const createCartItem = async (req, res) => {
@@ -233,10 +247,105 @@ const  generateLabImage = async (
   return `https://1b2029cb858f.ngrok-free.app/generated/${fileName}`;
 }
 
+//create a stripe checkout for extension
+const extensionStripeCheckout = async(req,res)=>{
+  try {  
+    let {
+            purchased_id,
+            lab_id,
+            lab_title,
+            org_id,
+            org_name,
+            admin_id,
+            admin_name,
+            additional_days,
+            additional_users,reason,payment} = req.body;
+      
+    const user = await getUsersData(admin_id);
+
+    const customer = await stripe.customers.create({
+      name: user.name,
+      email: user.email,
+    });
+  const generatedImageUrls = generateLabImage(lab_title, 'template.png',{
+   
+    // category: item.category,
+    orgName: org_name,
+    duration:additional_days || 'Not specified',
+    // level: item.level,
+    // by: item.by,
+  
+  })
+    const line_items = [ {
+      price_data: {
+        currency: payment.currency,
+        product_data: { name: lab_title,images:[generatedImageUrls] },
+        unit_amount: Math.round(parseFloat(payment.total) * 100),
+      },
+      quantity: 1,
+    }]
+    payment = JSON.stringify(payment);
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items,
+      mode: 'payment',
+      billing_address_collection: 'required',
+      phone_number_collection: { enabled: true },
+      consent_collection: {
+        terms_of_service: 'required',  // <-- this is required
+      },
+      custom_text: {
+        submit: { message: "Access Lab Now" },
+        terms_of_service_acceptance: {
+          message: "I agree to the Terms of Service"
+        }
+      },
+      success_url: `${process.env.FRONTEND_URL}/dashboard/my-purchases`,
+      cancel_url: `${process.env.FRONTEND_URL}`,
+      client_reference_id: admin_id, 
+      metadata: {
+        purchased_id,
+            lab_id,
+            lab_title,
+            org_id,
+            org_name,
+            admin_id,
+            admin_name,
+            additional_days,
+            additional_users,reason,
+            payment,
+            checkout_type:"EXTENSION_PURCHASE"
+      },
+      customer: customer.id,
+      allow_promotion_codes: true,
+      payment_intent_data: {
+        receipt_email: user.email,
+        metadata: {
+        purchased_id,
+            lab_id,
+            lab_title,
+            org_id,
+            org_name,
+            admin_id,
+            admin_name,
+            additional_days,
+            additional_users,reason,payment,
+            checkout_type:"EXTENSION_PURCHASE"
+      },
+      description: `Purchase of lab by user: ${user.name}`, 
+      }
+    });
+   return res.status(200).send({ success: true, sessionId: session.id });
+  } catch (error) {
+     console.error('Stripe checkout error:', error);
+    return res.status(500).send({ success: false, message: 'Internal server error.' });
+  }
+}
+
 
 const stripeCheckout = async (req, res) => {
   try {
-    const { userId, cartItems } = req.body;
+    const { userId, cartItems,org } = req.body;
     if (!userId || !cartItems || cartItems.length === 0) {
       return res.status(400).send({ success: false, message: 'User ID and cart items are required.' });
     }
@@ -262,7 +371,7 @@ const stripeCheckout = async (req, res) => {
         product_data: { name: item.name,images:[generatedImageUrls[index]] },
         unit_amount: Math.round(parseFloat(item.price) * 100),
       },
-      quantity: item.quantity,
+      quantity: 1,
     }));
     
     const customer = await stripe.customers.create({
@@ -284,12 +393,14 @@ const stripeCheckout = async (req, res) => {
           message: "I agree to the Terms of Service"
         }
       },
-      success_url: `${process.env.FRONTEND_URL}/dashboard/my-labs`,
+      success_url: `${process.env.FRONTEND_URL}/dashboard/${org ? "my-purchases" : "my-labs"}`,
       cancel_url: `${process.env.FRONTEND_URL}`,
       client_reference_id: userId, 
       metadata: {
         user_id: userId,
-        cart_id: cartId.toString() 
+        cart_id: cartId.toString() ,
+        org,
+        checkout_type:"LAB_PURCHASE"
       },
       customer: customer.id,
       allow_promotion_codes: true,
@@ -297,7 +408,9 @@ const stripeCheckout = async (req, res) => {
         receipt_email: user.email,
         metadata: {
         user_id: userId,
-        cart_id: cartId.toString() 
+        cart_id: cartId.toString(),
+        org,
+        checkout_type:"LAB_PURCHASE"
       },
       description: `Purchase of ${cartItems.length} ${cartItems.length > 1 ? 'labs ' :'lab '}by user: ${user.name}`, 
   }
@@ -349,26 +462,12 @@ const instaMojoCheckout = async(req,res)=>{
   }
 }
 
-const insertPaymentAndAssignLab = async (req, res) => {
-  
-  const sig = req.headers['stripe-signature'];
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('Webhook verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-  switch (event.type ) {
-    case 'checkout.session.completed':
-    const session = event.data.object;
+const insertPaymentAndAssignLab = async (session) => {
   
     const userId = session.metadata.user_id;
     const cartId = session.metadata.cart_id;
-
-    const cookies = cookie.parse(req.headers.cookie || '');
-    const sessionToken = cookies.session_token;
-    const user = await getUserData(userId,sessionToken);
+    const org = session.metadata.org;
+    const user = await getUsersData(userId);
     try {
       await pool.query('BEGIN');
       // Get original cart items from DB
@@ -376,7 +475,7 @@ const insertPaymentAndAssignLab = async (req, res) => {
       const cartItems = cartResult.rows[0].cart_data;
 
       for (const item of cartItems) {
-        const {  lab_id, duration,type,user_id ,name,price} = item;
+        const {  lab_id, quantity,duration,type,user_id ,name,price} = item;
         const deleteCart = await pool.query(cartQueries.DELETE_CARTS,[lab_id,userId]);
         const insertPayment = await pool.query(cartQueries.INSERT_PAYMENT, [
           userId,
@@ -387,7 +486,8 @@ const insertPaymentAndAssignLab = async (req, res) => {
           session.payment_status,
           session.customer_details.email,
           lab_id,
-          duration
+          duration,
+          org ? user?.org_id : null
         ]);
         
         const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
@@ -406,14 +506,28 @@ const insertPaymentAndAssignLab = async (req, res) => {
       }
         const paymentId = insertPayment.rows[0].id;
         let insertLab;
+        if(org){
+          insertLab = await pool.query(cartQueries.CREATE_SINGLEAWS_LAB_PURCHASE,[
+              lab_id,user?.id,user?.org_id,user?.organization,user_id,duration,quantity,duration,'active',paymentId,name
+            ])
+        }
+        
         if(type === 'cloudslice'){
-          console.log('its working')
-          insertLab = await pool.query(cartQueries.INSERT_ASSINGLAB_CLOUDSLICE_AWS, [
+          if(org){
+            if(insertLab.rowCount > 0){
+               assignLab = await pool.query(purchaseQueries.INSERT_ORG_ASSIGNMENT,[
+              lab_id,user?.org_id,user?.id,user_id,duration,true,insertLab?.rows[0]?.purchased_id
+             ])
+            }
+          }
+          else{
+            insertLab = await pool.query(cartQueries.INSERT_ASSINGLAB_CLOUDSLICE_AWS, [
           lab_id,
           userId,
           duration,
           paymentId,
         ]);
+          }
         
         const addEnrolled = await pool.query(cartQueries.INSERT_CLOUDSLICE_AWS_PURCHASED_LAB_ENROLLMENTS,[1,lab_id])
         const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
@@ -433,13 +547,21 @@ const insertPaymentAndAssignLab = async (req, res) => {
         
         }
         else if(type === 'singlevm-aws'){
-          insertLab = await pool.query(cartQueries.INSERT_ASSIGNLAB_SINGLEVM_AWS, [
+          if(org){
+              if(insertLab.rowCount > 0){
+              assignLab = await pool.query(purchaseQueries.INSERT_LAB_BATCH,[lab_id,user?.id,user?.org_id,user_id,duration,true,insertLab.rows[0].purchased_id]);
+            }
+          }
+          else{
+            insertLab = await pool.query(cartQueries.INSERT_ASSIGNLAB_SINGLEVM_AWS, [
           lab_id,
           userId,
           paymentId,
           duration,
           
-        ]);
+          ]);
+          }
+          
         const addEnrolled = await pool.query(cartQueries.INSERT_SINGLEVM_AWS_PURCHASED_LAB_ENROLLMENTS,[1,lab_id])
           const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
               if (userSettings.rowCount === 0) continue;
@@ -484,25 +606,49 @@ const insertPaymentAndAssignLab = async (req, res) => {
         }
       }
       await pool.query("COMMIT");
-      return res.status(200).send('Success');
     } catch (err) {
       await pool.query("ROLLBACK")
       console.error('Webhook processing error:', err);
-      return res.status(500).send('Internal Server Error');
     }
-       break;
-    case 'payment_intent.payment_succeeded':
-      const paymentIntent = event.data.object;
+    
+};
+const handleStripeWebhook = async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
 
-    // Handle failed payment intent
-    console.error('Payment failed:', paymentIntent);
-    break;
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-      break;
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  if (event.type !== 'checkout.session.completed') {
+    return res.status(200).json({ received: true });
   }
 
-  return res.status(200).send('Event ignored');
+  const session = event.data.object;
+  const type = session.metadata.checkout_type;
+
+  try {
+    await pool.query("BEGIN");
+    if (type === "LAB_PURCHASE") {
+      await insertPaymentAndAssignLab(session);
+    }
+    else if (type === "EXTENSION_PURCHASE") {
+      await createTheExtensionRequest(session);
+    }
+
+    await pool.query("COMMIT");
+
+    return res.status(200).json({ success: true });
+
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    return res.status(500).json({ error: error.message });
+  }
 };
 //get the transaction details
 const getTransactionDetails = async (req, res) => {
@@ -1050,5 +1196,7 @@ module.exports = {
     exportTransactions,
     userTransactions,
     instaMojoCheckout,
-    insertFreeLab
+    insertFreeLab,
+    extensionStripeCheckout,
+    handleStripeWebhook
 }

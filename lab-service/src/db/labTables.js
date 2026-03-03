@@ -181,7 +181,25 @@ const createTables = async()=>{
               created_by UUID,
               created_at TIMESTAMP DEFAULT NOW()
           );
-
+          `)
+        //create the lab_extension_request
+        await pool.query(`
+           CREATE TABLE IF NOT EXISTS lab_extension_requests (
+                  request_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                  purchased_id UUID,
+                  lab_id UUID,
+                  lab_title TEXT,
+                  org_id UUID,
+                  org_name TEXT,
+                  admin_id UUID,
+                  admin_name TEXT,
+                  additional_days INTEGER,
+                  additional_users INTEGER,
+                  reason TEXT,
+                  requested_at TIMESTAMPTZ DEFAULT NOW(),
+                  status TEXT DEFAULT 'pending',
+                  admin_note TEXT
+            );
           `)
 
            //create the table to store the organization cloud credentials
@@ -356,11 +374,32 @@ const createTables = async()=>{
         vmname TEXT,
         islaunched boolean default false,
         isrunning boolean default false
-    );
+    );`)
+    //purchased singlevm aws lab
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lab_batch_purchased (
+    purchased_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-        `
-      
-      )
+    lab_id UUID NOT NULL,
+    admin_id UUID NOT NULL,       
+    org_id UUID NOT NULL,
+    org_name TEXT,
+
+    configured_by UUID,     
+
+    number_of_days INTEGER NOT NULL CHECK (number_of_days > 0),
+    number_of_users INTEGER NOT NULL CHECK (number_of_users > 0),
+    assigned_users INTEGER DEFAULT 0 CHECK (assigned_users >= 0),
+
+    purchase_date TIMESTAMPTZ DEFAULT NOW(),
+    expiry_date TIMESTAMPTZ NOT NULL,
+
+    status TEXT NOT NULL CHECK (status IN ('active', 'expired', 'pending')),
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      `)
 
         console.log(`Successfully created tables`);
 

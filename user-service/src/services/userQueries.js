@@ -58,7 +58,7 @@ module.exports = {
     RETURNING *;`,
     UPDATE_ORGANIZATION_ADMIN:`UPDATE organizations set org_admin=$1 where id=$2 RETURNING *`,
 
-    ADD_ORG_USER: `INSERT INTO organization_users(name, email, password, role, admin_id,organization,org_id,organization_type) VALUES($1, $2, $3, $4, $5,$6,$7,$8) RETURNING *`,
+    ADD_ORG_USER: `INSERT INTO organization_users(name, email, password, role, admin_id,organization,org_id,organization_type,status) VALUES($1, $2, $3, $4, $5,$6,$7,$8,$9) RETURNING *`,
     GET_ORG_USERS: `SELECT * FROM organization_users WHERE org_id=$1`,
     UPDATE_USER: `UPDATE users SET name=$1, email=$2,password=$3,status=$4, role=$5  WHERE id=$6`,
     UPDATE_USER_NO_PASSWORD:`UPDATE users SET name=$1, email=$2,status=$3, role=$4  WHERE id=$5`,

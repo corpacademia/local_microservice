@@ -75,7 +75,7 @@ const {
   exportTransactions,
   userTransactions,
   insertFreeLab,
-  
+  extensionStripeCheckout 
 } = require('../controllers/labCartController');
 
 const {
@@ -196,6 +196,6 @@ router.post('/getAllUserPurchasedLabs',getAllUserPurchasedLabs);
 router.get('/getOrgAssignedLabs/:orgId',getAllOrganizationAssignedLabs);
 router.get('/getAllLabs',getAllLabs);
 router.post('/updateUserLabCompletedStatus',updateUserLabCompletedStatus)
-
+router.post('/extensionStripeCheckout',extensionStripeCheckout)
 
 module.exports = router;

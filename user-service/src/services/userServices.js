@@ -405,8 +405,22 @@ const addUser = async (userData) => {
     throw new Error('User with this email already exists in the organization');
   }
     const hashedPassword = await hashPassword(password);
-
-    const result = await pool.query(userQueries.addUser, [
+    let result;
+      if(role === 'user' || role === 'trainer'){
+         result = await pool.query(userQueries.addToOrg, [
+        name,
+        email,
+        hashedPassword,
+        role,
+        orgName, 
+        orgType,
+        orgId,
+        id,
+        'inactive'
+      ]);
+      }
+      else{
+        result = await pool.query(userQueries.addUser, [
         name,
         email,
         hashedPassword,
@@ -416,6 +430,8 @@ const addUser = async (userData) => {
         orgId,
         id,
     ]);
+      }
+     
  // 3. Prepare email HTML
  const templatePath = path.join(
   'C:/Users/Admin/Desktop/golab_project/Client/public/templates/email-template.html'
@@ -500,7 +516,7 @@ try {
       let result;
       await pool.query("BEGIN");
       //  Insert into DB
-      if(user?.role === 'user' || role === 'user'){
+      if(user?.role === 'user' || role === 'trainer'){
          result = await pool.query(userQueries.addToOrg, [
         name,
         email,
@@ -802,11 +818,12 @@ const addOrganizationUser = async (userData) => {
     admin_id,
     organization,
     org_id,
-    organization_type
+    organization_type,
+    'inactive'
   ]);
   }
   else{
-    result = await pool.query(userQueries.addUser, [
+    result = await pool.query(userQueries.addUsers, [
     name,
     email,
     hashedPassword,
@@ -815,6 +832,7 @@ const addOrganizationUser = async (userData) => {
     organization_type,
     org_id,
     admin_id,
+    'inactive'
   ]);
   if(role === 'orgsuperadmin'){
     const userId = result.rows[0].id;

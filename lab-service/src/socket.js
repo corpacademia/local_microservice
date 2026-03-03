@@ -41,4 +41,9 @@ function sendNotification({ userId, notification }) {
   publisher.publish("notification", message);
 }
 
-module.exports = { sendNotification };
+function cataloguePurchaseUpdate({orgId,data}){
+  const message = JSON.stringify({orgId,data});
+  publisher.publish("cataloguePurchase",message)
+}
+
+module.exports = { sendNotification, cataloguePurchaseUpdate };

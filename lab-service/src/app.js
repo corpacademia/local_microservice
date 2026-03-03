@@ -8,7 +8,8 @@ const reviewRouter = require('../src/routes/reviewRoutes');
 const proxmoxRouter = require('../src/routes/proxmoxRoutes');
 const batchRouter = require('../src/routes/batchesRoutes');
 const credentialsRouter = require("../src/routes/cloudCredentialsRoutes");
-const fetchLabsRouter = require("../src/routes/fetchLabsRoutes")
+const fetchLabsRouter = require("../src/routes/fetchLabsRoutes");
+const purchaseRouter = require("../src/routes/purchaseRoutes");
 const path = require('path');
 const fs = require('fs');
 const mime = require('mime-types');
@@ -16,7 +17,7 @@ const session = require("express-session");
 const {sessionMiddleware} = require('../src/config/session');
 
 const app = express();
-const { insertPaymentAndAssignLab } = require('./controllers/labCartController'); 
+const { handleStripeWebhook } = require('./controllers/labCartController'); 
 
 //tables
 const tables = require('./db/labTables');
@@ -27,7 +28,7 @@ tables;
 // app.use(sessionMiddleware);
 
 // Mount it before any bodyParser middleware
-app.use('/webhook', express.raw({ type: 'application/json' }), insertPaymentAndAssignLab);
+app.use('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors({
@@ -71,7 +72,8 @@ app.use('/',reviewRouter);
 app.use('/',proxmoxRouter);
 app.use('/',batchRouter);
 app.use('/',credentialsRouter);
-app.use('/',fetchLabsRouter)
+app.use('/',fetchLabsRouter);
+app.use('/',purchaseRouter);
 
 
 

@@ -1,6 +1,8 @@
 const batchQueries = require('./batchesQueries');
 const proxmoxQueries = require('./promoxQueries');
 const labQueries = require('./labQueries');
+const purchaseQueries = require('./purchaseQueries');
+const {cataloguePurchaseUpdate} = require('../socket');
 const cookie = require('cookie');
 const pool = require('../db/dbConfig');
 const axios = require('axios');
@@ -180,7 +182,7 @@ const addUsersToBatch = async(req,res)=>{
             }
             //ADD IF THERE ARE EXISTING LABS FOR BATCH
             for(const labId of labIds){
-                const getLab = await pool.query(batchQueries.GET_LAB_DETAILS_BATCH,[labId]);
+                const getLab = await pool.query(batchQueries.GET_LAB_DETAILS_BATCH,[labId,userDetails?.org_id]);
                 const getLabDetails = getLabsOfBatch?.rows?.find(lab=>lab?.lab_id === labId);
                
                 if(!getLab?.rows?.length){
@@ -190,6 +192,12 @@ const addUsersToBatch = async(req,res)=>{
                     })
                 }
                 let labDetails = getLab.rows[0];
+                if(labDetails?.quantity <= 0){
+                  return res.status(400).send({
+                    success:false,
+                    message:"The number of users exceed quantity"
+                  })
+                }
                 if(labDetails.type === 'singlevm-proxmox'){
                      const checkAlreadyAssigned = await pool.query(proxmoxQueries.CHECK_ALREADY_ASSIGNED, [userId, labId]);
              
@@ -313,8 +321,13 @@ const addUsersToBatch = async(req,res)=>{
       }
 
                 await pool.query(batchQueries.UPDATE_BATCH_USER_TLAB,[1,userId]);
-                await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batchId,labId])
-
+                await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batchId,labId]);
+                const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[1,labId,userDetails?.org_id]);
+                const updateData = purchaseResult.rows[0];
+                await cataloguePurchaseUpdate({
+                  orgId:userDetails?.org_id,
+                  data:updateData
+                })
             }
 
         }
@@ -550,9 +563,14 @@ const addLabsToBatch = async (req, res) => {
       else if (type === 'cloudslice'){
         await assignCloudsliceLab(lab_id, user.user_id, assigned_by, start_date, end_date,sessionToken,batch_id)
       }
-
       await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB, [1, batch_id,user?.user_id]);
       await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batch_id,lab_id]);
+       const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[1,lab_id,org_id]);
+                const updateData = purchaseResult.rows[0];
+                await cataloguePurchaseUpdate({
+                  orgId:org_id,
+                  data:updateData
+                })
     }
 
     // Update batch counters
@@ -615,7 +633,6 @@ const getBatchLabs = async(req,res)=>{
 const getLabsForBatch = async (req,res)=>{
     try {
          const {userId,orgId,role} = req.body;
-         console.log(req.body)
     if(!userId  || !role){
         return res.status(400).send({
             success:false,
@@ -822,7 +839,7 @@ const deleteUserAndItsLabs = async (req, res) => {
     if (!deleteUser.rowCount) {
       throw new Error("Could not delete user from batch");
     }
-
+    const userData = await getUserData(userId,sessionToken);
     // 2️⃣ Process labs
     for (const labId of labIds) {
 
@@ -880,7 +897,13 @@ const deleteUserAndItsLabs = async (req, res) => {
       ]);
 
       //delete user count in batchlabs
-      await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[-1,batchId,labId])
+      await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[-1,batchId,labId]);
+      const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[-1,labId,userData?.org_id]);
+                const updateData = purchaseResult.rows[0];
+                await cataloguePurchaseUpdate({
+                  orgId:userData?.org_id,
+                  data:updateData
+                })
     }
 
     // 3️⃣ Update user count ONCE
@@ -1088,6 +1111,8 @@ const deleteBatch = async(req,res)=>{
         { headers: { Cookie: `session_token=${sessionToken}` } }
       );
          for (const user of getBatchUsers.rows){
+          const userData = await getUserData(user?.user_id,sessionToken);
+
        const instanceRes = await pool.query(
         batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
         [user?.user_id, lab?.lab_id, "batch", batchId]
@@ -1134,6 +1159,13 @@ const deleteBatch = async(req,res)=>{
              await pool.query(batchQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[lab.lab_id,user.user_id,'batch',batchId]);
              await pool.query(batchQueries.DELETE_RANDOM_USER_CREDS,[lab.lab_id,user.user_id,'batch',batchId]);
              await pool.query(batchQueries.DELETE_USER_DATACENTER_LAB,[lab.lab_id,user.user_id,'batch',batchId]);
+
+              const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[-1,lab.lab_id,userData?.org_id]);
+                const updateData = purchaseResult.rows[0];
+                await cataloguePurchaseUpdate({
+                  orgId:userData?.org_id,
+                  data:updateData
+                })
         }
       }
        await pool.query(batchQueries.DELETE_USERS_FROM_BATCH,[batchId]);
@@ -1189,12 +1221,13 @@ const deleteLabFromBatch = async(req,res)=>{
         }
         const getBatchUsers = await pool.query(batchQueries.GET_USERSOF_BATCH,[batchId]);
 
-                const amiRes = await axios.post(
+        const amiRes = await axios.post(
                 `${process.env.BACKEND_URL}/api/v1/lab_ms/amiinformation`,
                 { lab_id: labId },
                 { headers: { Cookie: `session_token=${sessionToken}` } }
-            );
+        );
         for (const user of getBatchUsers.rows){
+          const userData = await getUserData(user?.user_id,sessionToken);
        const update = await pool.query(batchQueries.UPDATE_BATCHLAB_USER_COUNT,[-1,batchId,user?.user_id]);
         const instanceRes = await pool.query(
           batchQueries.DELETE_CLOUD_ASSIGNED_INSTANCE,
@@ -1246,6 +1279,14 @@ const deleteLabFromBatch = async(req,res)=>{
              await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB,[-1,batchId,user?.user_id]);
              await pool.query(batchQueries.UPDATE_BATCHLAB_COMPLETED_USER_COUNT,[-1,batchId,user?.user_id]);
              await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_COMPLETED,[-1,batchId,labId]);
+
+              const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[-1,labId,userData?.org_id]);
+                const updateData = purchaseResult.rows[0];
+                await cataloguePurchaseUpdate({
+                  orgId:userData?.org_id,
+                  data:updateData
+                })
+
         }
         await pool.query(batchQueries.UPDATE_BATCHLAB_COUNT,[-1,batchId]);
         // await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB,[-1,batchId]);
