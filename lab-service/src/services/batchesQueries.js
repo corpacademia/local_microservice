@@ -269,11 +269,14 @@ SELECT
   csl.enddate AS end_date,
   'cloudslice' AS type,
   COALESCE(csoa.purchased, false) AS purchased,
-  NULL AS quantity
+  COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
 FROM cloudslicelab csl
 LEFT JOIN cloudsliceorgassignment csoa
   ON csoa.labid = csl.labid
   AND csoa.orgid = $2
+LEFT JOIN lab_batch_purchased lbp
+  ON lbp.lab_id = csl.labid
+  AND lbp.org_id = $2
 WHERE
   $3 = true
   OR csl.createdby = $1
@@ -370,8 +373,11 @@ SELECT
     csl.startdate AS start_date,
     csl.enddate AS end_date,
     'cloudslice' AS type,
-    NULL AS quantity
+    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
 FROM cloudslicelab csl
+LEFT JOIN lab_batch_purchased lbp
+    ON lbp.lab_id = csl.labid
+    AND lbp.org_id = $2
 WHERE csl.labid = $1::uuid
 
 UNION ALL
@@ -384,10 +390,12 @@ SELECT
     sp.startdate AS start_date,
     sp.enddate AS end_date,
     'singlevm-proxmox' AS type,
-    NULL AS quantity
+    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
 FROM singlevmproxmox_lab sp
+LEFT JOIN lab_batch_purchased lbp
+    ON lbp.lab_id = sp.labid
+    AND lbp.org_id = $2
 WHERE sp.labid = $1::uuid
-
 UNION ALL
 
 /* ---------- Single VM Datacenter ---------- */

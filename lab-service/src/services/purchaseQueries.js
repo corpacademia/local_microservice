@@ -22,6 +22,7 @@ module.exports = {
     UPDATE_ASSIGNED_USERS:`UPDATE lab_batch_purchased SET assigned_users = GREATEST(COALESCE(assigned_users,0)+$1,0) WHERE lab_id=$2 AND org_id=$3 RETURNING *`,
     UPDATE_CURRENT_DAYS_USERS:`UPDATE lab_batch_purchased SET number_of_days = GREATEST(COALESCE(number_of_days,0) + $1,0),number_of_users = GREATEST(COALESCE(number_of_users,0) + $2,0),expiry_date = expiry_date + ($1 || ' days')::interval WHERE purchased_id=$3`,
     UPDATE_EXPIRY_LAB:`UPDATE lab_batch  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
+    UPDATE_EXPIRY_LAB_CLOUDSLICE:`UPDATE cloudsliceorgassignment  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
     UPDATE_EXTENSION_APPORREJ:`UPDATE lab_extension_requests SET status=$1,admin_note=$2 WHERE request_id=$3 RETURNING *`,
 }
     

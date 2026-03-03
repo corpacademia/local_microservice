@@ -181,8 +181,10 @@ const approveOrRejectExtensionRequest = async(req,res)=>{
                     approved_users,
                     admin_note,
                     status,
+                    type
         } = req.body;
-        if(!request_id  || !status){
+        console.log(req.body)
+        if(!request_id  || !status ||!type){
             return res.status(400).send({
                 success:false,
                 message:"Please provide all required fields"
@@ -199,7 +201,10 @@ const approveOrRejectExtensionRequest = async(req,res)=>{
         }
         if(status === 'approved'){
             await pool.query(purchaseQueries.UPDATE_CURRENT_DAYS_USERS,[approved_days,approved_users,purchased_id]);
-            await pool.query(purchaseQueries.UPDATE_EXPIRY_LAB,[approved_days,purchased_id]);
+            if(type === "singlevm-aws")
+               await pool.query(purchaseQueries.UPDATE_EXPIRY_LAB,[approved_days,purchased_id]);
+            else if(type === "cloudslice")
+                await pool.query(purchaseQueries.UPDATE_EXPIRY_LAB_CLOUDSLICE,[approved_days,purchased_id]);
             }
         
         await pool.query('COMMIT');

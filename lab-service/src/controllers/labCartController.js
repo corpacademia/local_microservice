@@ -342,7 +342,6 @@ const extensionStripeCheckout = async(req,res)=>{
   }
 }
 
-
 const stripeCheckout = async (req, res) => {
   try {
     const { userId, cartItems,org } = req.body;
@@ -508,7 +507,7 @@ const insertPaymentAndAssignLab = async (session) => {
         let insertLab;
         if(org){
           insertLab = await pool.query(cartQueries.CREATE_SINGLEAWS_LAB_PURCHASE,[
-              lab_id,user?.id,user?.org_id,user?.organization,user_id,duration,quantity,duration,'active',paymentId,name
+              lab_id,user?.id,user?.org_id,user?.organization,user_id,duration,quantity,duration,'active',paymentId,name,type
             ])
         }
         

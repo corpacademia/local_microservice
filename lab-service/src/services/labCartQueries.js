@@ -12,8 +12,8 @@ module.exports = {
                     duration,
                     org_id
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10) RETURNING *`,
-    CREATE_SINGLEAWS_LAB_PURCHASE:`INSERT INTO lab_batch_purchased(lab_id,admin_id,org_id,org_name,configured_by,number_of_days,number_of_users,expiry_date,status,payment_id,lab_title)
-                                  VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + ($8 * INTERVAL '1 day'),$9,$10,$11) RETURNING *`,
+    CREATE_SINGLEAWS_LAB_PURCHASE:`INSERT INTO lab_batch_purchased(lab_id,admin_id,org_id,org_name,configured_by,number_of_days,number_of_users,expiry_date,status,payment_id,lab_title,type)
+                                  VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + ($8 * INTERVAL '1 day'),$9,$10,$11,$12) RETURNING *`,
     INSERT_ASSIGNLAB_SINGLEVM_AWS:`INSERT INTO singlevm_aws_purchased_labs (labid, user_id, payment_id,  duration) VALUES ($1, $2, $3, $4) RETURNING *`,
     INSERT_ASSINGLAB_CLOUDSLICE_AWS:`INSERT INTO cloudslice_purchased_labs (labid,user_id,duration,payment_id) VALUES($1,$2,$3,$4) RETURNING *`,
     INSERT_ASSINGLAB_SINGLEVM_PROXMOX_PURCHASED:`INSERT INTO singlevmproxmox_purchased_labs (labid,user_id,duration,payment_id,vmname) VALUES($1,$2,$3,$4,$5) RETURNING *`,

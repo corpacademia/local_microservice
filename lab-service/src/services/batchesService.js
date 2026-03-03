@@ -632,7 +632,7 @@ const getBatchLabs = async(req,res)=>{
 //get labs for batches
 const getLabsForBatch = async (req,res)=>{
     try {
-         const {userId,orgId,role} = req.body;
+        const {userId,orgId,role} = req.body;
     if(!userId  || !role){
         return res.status(400).send({
             success:false,
