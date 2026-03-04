@@ -8,7 +8,7 @@ const fs = require('fs');
 const mime = require('mime-types');
 
 const app = express();
-
+require('dotenv').config();
 //tables
 const tables = require('./dbconfig/clusterTables');
 tables;
@@ -19,7 +19,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
 app.use(cookieParser());
 
 app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: process.env.CORS || "http://localhost:5173",
     credentials: true,
 }));
 

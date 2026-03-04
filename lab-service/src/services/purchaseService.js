@@ -205,6 +205,8 @@ const approveOrRejectExtensionRequest = async(req,res)=>{
                await pool.query(purchaseQueries.UPDATE_EXPIRY_LAB,[approved_days,purchased_id]);
             else if(type === "cloudslice")
                 await pool.query(purchaseQueries.UPDATE_EXPIRY_LAB_CLOUDSLICE,[approved_days,purchased_id]);
+            else if(type === "singlevm-proxmox")
+                await pool.query(purchaseQueries.UPDATE_EXPIRY_LAB_SINGLEVMPROXMOX,[approved_days,purchased_id]);
             }
         
         await pool.query('COMMIT');

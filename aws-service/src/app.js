@@ -3,13 +3,14 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const awsRoutes = require('../src/routes/awsRoutes');
+require('dotenv').config();
 
 const app = express();
 
 
 //middlewares
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CORS || "http://localhost:5173",
     credentials: true
 }));
 app.use(express.json());

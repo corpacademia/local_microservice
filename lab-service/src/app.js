@@ -15,6 +15,7 @@ const fs = require('fs');
 const mime = require('mime-types');
 const session = require("express-session");
 const {sessionMiddleware} = require('../src/config/session');
+require('dotenv').config();
 
 const app = express();
 const { handleStripeWebhook } = require('./controllers/labCartController'); 
@@ -32,7 +33,7 @@ app.use('/webhook', express.raw({ type: 'application/json' }), handleStripeWebho
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CORS || "http://localhost:5173",
     credentials: true
 }));
 app.use(cookieParser());

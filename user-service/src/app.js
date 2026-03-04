@@ -3,7 +3,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser')
 const bodyParser = require('body-parser')
 const authRouter = require('./routes/authRoutes')
-
+require('dotenv').config();
 const app = express();
 
 //tables
@@ -16,7 +16,7 @@ app.use(express.urlencoded({extended:true}));
 app.use(bodyParser.json())
 app.use(cookieParser());
 app.use(cors({
-    origin:process.env.FRONTEND_URL || "http://localhost:5173",
+    origin:process.env.CORS || "http://localhost:5173",
     credentials:true,
 }));
 

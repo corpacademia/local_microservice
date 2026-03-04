@@ -579,14 +579,19 @@ const insertPaymentAndAssignLab = async (session) => {
         }
         else if (type === 'singlevm-proxmox'){
           const vmName = user.name.replace(' ','-');
-            insertLab = await pool.query(cartQueries.INSERT_ASSINGLAB_SINGLEVM_PROXMOX_PURCHASED, [
+          if(org){
+            assignLab = await pool.query(purchaseQueries.INSERT_SINGLEVMPROXMOX_ORG_ASSIGNMENT,[lab_id,user?.org_id,duration,user_id,user?.id,vmName,true,insertLab.rows[0].purchased_id]);
+          }
+          else{
+             insertLab = await pool.query(cartQueries.INSERT_ASSINGLAB_SINGLEVM_PROXMOX_PURCHASED, [
           lab_id,
           userId,
           duration,
           paymentId,
           vmName
         ]);
-        
+          }
+           
         const addEnrolled = await pool.query(cartQueries.INSERT_SINGLEVM_PROXMOX_PURCHASED_LAB_ENROLLMENTS,[1,lab_id])
         const userSettings = await pool.query(labQueries.GET_USER_NOTIFICATION_SETTINGS, [user_id]);
               if (userSettings.rowCount === 0) continue;
