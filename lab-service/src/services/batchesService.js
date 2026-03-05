@@ -173,6 +173,13 @@ const addUsersToBatch = async(req,res)=>{
         
         for (const userId of userIds){
             const userDetails = await getUserData(userId,sessionToken)
+            const checkUserAlreadyExist = await pool.query(batchQueries.CHECK_BATCH_USER_ALREADY_EXIST,[userId,batchId]);
+            if(checkUserAlreadyExist.rowCount > 0){
+              return res.status(400).send({
+                success:false,
+                message:`User ${userDetails?.name} alredy exist`
+              })
+            }
             const addUser = await pool.query(batchQueries.CREATE_BATCH_USER,[batchId,userId]);
             if(!addUser.rows.length){
                 return res.status(404).send({
