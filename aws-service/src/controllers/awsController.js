@@ -190,7 +190,6 @@ const goldenToInstanceForNewCatalogue = async (req, res) => {
 const deleteVm = async (req, res) => {
   try {
     const { id, instance_id, ami_id, user_id,purchased } = req.body;
-
     const response = await terraformService.deleteLabService(id, instance_id, ami_id, user_id,purchased);
 
     return res.status(200).send(response);
@@ -248,13 +247,14 @@ const handleLaunchSoftwareOrStop = async (req, res) => {
         message:"successfully executed..",
         response
       });
-  } catch (error) {
-      return res.status(500).send({
-          success: false,
-          message: "Could not Launch or Stop software",
-          error: error.message,
-      });
-  }
+  } 
+      catch (error) {
+          return res.status(500).send({
+              success: false,
+              message: "Could not Launch or Stop software",
+              error: error.message,
+          });
+      }
 };
 const getDecryptPasswordFromCloud = async (req, res) => {
   try {

@@ -3,9 +3,10 @@ const cartQueries = require('../services/labCartQueries');
 
 const pool = require('../db/dbConfig');
 
-const createCartItem = async (labId, name, description, duration, price, quantity, userId) => {
+const createCartItem = async (labId, name, description, duration, price,currency, quantity, userId,credsId,available,number_hours_day) => {
     try {
-        const result = await pool.query(cartQueries.CREATE_CART_ITEM, [labId, name, description, duration, price, quantity, userId,duration,price]);
+        console.log(labId, name, description, duration, price, quantity, userId,duration,price,credsId,available,currency)
+        const result = await pool.query(cartQueries.CREATE_CART_ITEM, [labId, name, description, duration, price, quantity, userId,duration,price,credsId,available,currency,number_hours_day,number_hours_day]);
         return result.rows[0];
     } catch (error) {
         console.error('Error creating cart item:', error);
@@ -46,9 +47,9 @@ const deleteCartItemsOnUserId = async (userId) => {
 }
 
 //update the cart item
-const updateCartItem = async (duration, quantity,price, cartItemId) => {
+const updateCartItem = async (duration, quantity,price, cartItemId,numberOfHours) => {
     try {
-        const result = await pool.query(cartQueries.UPDATE_CART_ITEM, [duration, quantity,price, cartItemId]);
+        const result = await pool.query(cartQueries.UPDATE_CART_ITEM, [duration, quantity,price, cartItemId,numberOfHours]);
         return result.rows[0];
     } catch (error) {
         console.error('Error updating cart item:', error);

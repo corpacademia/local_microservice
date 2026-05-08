@@ -23,7 +23,8 @@ const {
     getVMClusterDatacenterlabDetails,
     updateUserLabTimingsOfVMClusterDatacenter,
     updateCatalogueDetails,
-    updateUserVMClusterDatacenterStatus
+    updateUserVMClusterDatacenterStatus,
+    getUserPurchasedDatacenterLabs
 } = require('../controller/clusterController');
 
 const uploadDir = path.join(__dirname, '../public/uploads/');
@@ -57,6 +58,8 @@ router.post('/assignToOrganization',vmclusterDatacenterLabOrgAssignment);
 router.post('/getOrglabs',getAllTheOrganizationLabs);
 router.post('/assignCluster',assignLabToUser);
 router.post('/getUserAssignedClusterLabs/:userId',getUserAssignedDatacenterLabs);
+router.post('/getUserPurchasedClusterLabs/:userId',getUserPurchasedDatacenterLabs);
+
 router.post('/getClusterLabOnId',getVMClusterDatacenterlabOnLabId);
 router.post('/getUserAssignedClusterCredsToUser',gerUserCredentialsForUser);
 router.post('/deleteFromOrganization',deleteDatacenterLabFromOrg);

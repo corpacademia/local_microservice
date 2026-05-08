@@ -8,9 +8,11 @@ const axios = require('axios');
 const { randomBytes } = require('crypto');
 const { getUserEmail, markEmailAsSent, isWithinQuietHours, nowInTz, emailPlacehoders } = require('./emailNotificationService');
 const { sendNotificationToMail } = require('./notificationServices');
-const { sendNotification } = require('../socket');
+const { sendNotification, cataloguePurchaseUpdate } = require('../socket');
 const batchesQueries = require('./batchesQueries');
 const promoxQueries = require('./promoxQueries');
+const purchaseQueries = require('./purchaseQueries');
+const { getUsersData } = require('../controllers/labCartController');
 
 
 
@@ -161,9 +163,9 @@ const getDatacenterLabCredentials = async (labId) => {
     }
 };
 //update single vm datacenter lab
-const updateSingleVmDatacenterLab = async (labId, software, catalogueType,catalogueName,level,category,price) => {
+const updateSingleVmDatacenterLab = async (labId, software, catalogueType,catalogueName,level,category,price,hoursPerDay) => {
     try {
-        const result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER, [software, catalogueType, labId,catalogueName,level,category,price]);
+        const result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER, [software, catalogueType, labId,catalogueName,level,category,price,hoursPerDay]);
         if (!result.rows[0]) {
             throw new Error("Could not update the single VM datacenter lab");
         }
@@ -195,6 +197,18 @@ const getAllLabCatalogues = async (user) => {
         throw error;
     }
 };
+
+//get all organization labs
+const getAllOrganizationLabs = async(orgId)=>{
+    try {
+        const result = await pool.query(queries.GET_ALL_LABS_BY_ORG,[orgId]);
+        if(!result.rows) []
+        return result.rows;
+    } catch (error) {
+        throw error;
+    }
+}
+
 const getAllOrganizationAssignedLabs = async(orgId) =>{
     try {
     const result = await pool.query(queries.GET_ALL_ORG_ASSIGNED_LABS,[orgId]);
@@ -207,7 +221,6 @@ const getAllOrganizationAssignedLabs = async(orgId) =>{
         throw error;
     }
 }
-
 
 //get all user purchased labs
 const getAllUserPurchasedLabs = async(userId)=>{
@@ -251,7 +264,6 @@ const getUserPurchasedSinglvmLabsOnLabId = async(labId)=>{
     }
 }
 
-
 //delete catalogue
 const deleteCatalogue = async (catalogueId) => {
   const client = await pool.connect();
@@ -259,6 +271,7 @@ const deleteCatalogue = async (catalogueId) => {
     await client.query('BEGIN');
 
     await client.query(queries.UPDATE_CREATELAB_CATALOGUE, [catalogueId]);
+    await client.query(queries.UPDATE_SINGLEVM_PROXMOX_CATALOGUE,[catalogueId]);
     await client.query(queries.UPDATE_SINGLEVM_CATALOGUE, [catalogueId]);
     await client.query(queries.UPDATE_VMCLUSTER_CATALOGUE, [catalogueId]);
     await client.query(queries.UPDATE_CLOUDSLICE_CATALOGUE, [catalogueId]);
@@ -315,16 +328,45 @@ const updateCatalogueDetails = async (
 };
 
 //update single vm user cred running state
-const  updateSingleVMDatacenterUserCredRunningState = async (isrunning, User, labId) => {
+const  updateSingleVMDatacenterUserCredRunningState = async (isrunning, User, labId,purchased,hoursPerDay,duration) => {
     try {
-        console.log("Updating user credential running state:", { isrunning, User, labId });
+        console.log("Updating user credential running state:", { isrunning, User, labId ,hoursPerDay,duration});
+       
         if(isrunning){
-            const update = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_USER_STATUSS,['started', User, labId]);
+            let update;
+            if(purchased){
+                update = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_USER_PURCHASED_STATUSS,['started', User, labId]);
+                 const checkRemainingMins = await pool.query(queries.GET_USERCREDITS_DATA,[User,labId]);
+                if(checkRemainingMins?.rows[0]?.remaining_minutes <= 0){
+                    return result.status(404).send({
+                        success:false,
+                        message:"Lab Time exceeded"
+                    })
+                }
+                if( !checkRemainingMins?.rows?.length > 0){
+                 const total_minutes = duration * hoursPerDay
+                //user credits
+                await pool.query(queries.INSERT_USER_CREDITS,[User,labId,total_minutes,total_minutes]);
+                }
+                 //user session
+                await pool.query(queries.INSERT_LAB_SESSION,[labId,User,true,'singlevm-datacenter']);
+               
+                }
+            else
+                update = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_USER_STATUSS,['started', User, labId]);
             if(!update.rows.length){
                 throw new Error("No lab instance found for this user");
             }
         }
-        const result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_CREDS_RUNNINGSTATE, [isrunning, User, labId]);
+        if(!isrunning){
+            //stop session
+            await pool.query(promoxQueries.UPDATE_LAB_END_SESSION,[false,labId,User]);
+        }
+        let result;
+         if(purchased){
+            result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_PURCHASED_CREDS_RUNNINGSTATE, [isrunning, User, labId]);
+        } else
+           result = await pool.query(queries.UPDATE_SINGLEVM_DATACENTER_CREDS_RUNNINGSTATE, [isrunning, User, labId]);
         if (!result.rows[0]) {
             throw new Error("Could not update the single VM datacenter lab");
         }
@@ -421,10 +463,20 @@ const createDatacenterLabOrgAssignment = async (labId, orgId,admin_id, assignedB
 }
 
 //delete single vm datacenter lab for user 
-const deleteSingleVMDatacenterLabForUser = async(labId,userId)=>{
+const deleteSingleVMDatacenterLabForUser = async(labId,userId,purchased)=>{
     try {
+        const userData = await getUsersData(userId);
         await pool.query(labQueries.DELETE_USER_CRED_FROM_CREDS,[null,userId]);
-        await pool.query(labQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[labId,userId]);
+        if(purchased){
+            await pool.query(labQueries.DELETE_SINGLEVM_DATACENTER_FROM_PURCHASED_USER,[labId,userId]);
+        }else{
+           await pool.query(labQueries.DELETE_SINGLEVM_DATACENTER_FROM_USER,[labId,userId]);
+        } const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[-1,labId,userData?.org_id]);
+                        const updateData = purchaseResult.rows[0];
+                        cataloguePurchaseUpdate({
+                          orgId:userData?.org_id,
+                          data:updateData
+                        })
         return true
     } catch (error) {
         console.log("Error in deleting the single vm datacenter lab of user:",error.message);
@@ -587,6 +639,21 @@ const getUserAssignedSingleVMDatacenterLabs =  async(userId)=>{
     }
 }
 
+//user purchased singlevmdatacenter lab
+const getUserPurchasedSingleVMDatacenterLabs =  async(userId)=>{
+    try {
+        const result =  await pool.query(labQueries.GET_USERPURCHASED_SINGLEVM_DATACENTER_LAB,[userId]);
+        if(!result.rows.length){
+            // throw new Error("No labs found for this user.");
+            return [];
+        }
+        return result.rows;
+    } catch (error) {
+        console.log(error);
+        throw new Error("Error in retrieving the user labs")
+    }
+}
+
 //get the credentials for user
 const getUserAssignedSingleVMDatacenterCredsToUser =  async(labId,userId)=>{
     try {
@@ -630,7 +697,7 @@ const getDatacenterLabsOnAdminId = async (adminId) => {
     try {
         const result = await pool.query(labQueries.GET_DATACENTER_LAB_ON_ADMIN_ID, [adminId]);
         if (!result.rows.length) {
-            throw new Error("No datacenter labs found for this admin");
+            return [];
         }
         return result.rows;
     } catch (error) {
@@ -638,6 +705,20 @@ const getDatacenterLabsOnAdminId = async (adminId) => {
         throw new Error("Error retrieving datacenter labs: " + error.message);
     }
 };
+
+//get datacenter labs of labadmins
+const getDatacenterLabAdminsLab = async(adminIds)=>{
+    try {
+        const result = await pool.query(labQueries.GET_DATACENTER_LAB_ON_LABADMIN_ID, [adminIds]);
+        if (!result.rows.length) {
+            return [];
+        }
+        return result.rows;
+    } catch (error) {
+        console.error("Error in getDatacenterLabsOnAdminId service:", error.message);
+        throw new Error("Error retrieving datacenter labs: " + error.message);
+    }
+}
 
 //get datacenter labs on lab id
 const getDatacenterLabsOnLabId = async (labId) => {
@@ -1297,5 +1378,8 @@ module.exports = {
     getAllUserPurchasedLabs,
     getAllOrganizationAssignedLabs,
     getAllLabs,
-    updateUserLabCompletedStatus
+    updateUserLabCompletedStatus,
+    getUserPurchasedSingleVMDatacenterLabs,
+    getAllOrganizationLabs,
+    getDatacenterLabAdminsLab
 }

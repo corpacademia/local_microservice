@@ -3,6 +3,7 @@ module.exports = {
                                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
     CREATE_EXTENSION_REQUEST:`INSERT INTO lab_extension_requests(purchased_id,lab_id,lab_title,org_id,org_name,admin_id,admin_name,additional_days,additional_users,reason,payment_id)
                                   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    CREATE_LICENSE_KEY:`INSERT INTO license_keys(license_key,org_id,org_name,plan_tier,plan_name,billing_cycle,status,issued_at,expires_at,features,usage,created_at,plan_id,payment_id) VALUES($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()+($8 * INTERVAL '1 day'),$9,$10,NOW(),$11,$12) RETURNING *`,
 
     GET_CATALOGUE_PURCHASE_DETAILS_FORADMIN:`SELECT * FROM lab_batch_purchased`,
     GET_CATALOGUE_PURCHASE_DETAILS_ORG:`SELECT * FROM lab_batch_purchased WHERE org_id=$1`,
@@ -15,7 +16,12 @@ module.exports = {
         ON ler.purchased_id = lbp.purchased_id
     ORDER BY ler.requested_at DESC`,
     GET_EXTENSION_FOR_ORG:`SELECT * FROM lab_extension_requests WHERE org_id=$1`,
-   
+    GET_USER_PURCHASED_SINGLEVM_DATACENTER_LABS:`SELECT * FROM singlevmdatacenter_purchased WHERE labid=$1`,
+    CHECK_AVAILABILITY_CREDENTIALS:` SELECT id 
+        FROM user_credential_groups 
+        WHERE userassigned IS NULL 
+            AND orgassigned IS NULL 
+            AND labid = $1 `,
     INSERT_ORG_ASSIGNMENT:`INSERT INTO cloudsliceorgassignment(labid,orgid,admin_id,assigned_by,startdate,enddate,purchased,purchased_id) VALUES($1,$2,$3,$4,NOW(),NOW() + ($5 || ' days')::interval,$6,$7) RETURNING *`,
     INSERT_LAB_BATCH: `INSERT INTO lab_batch(lab_id, admin_id, org_id, configured_by,enddate,startdate,assigned_at,purchased,purchased_id) 
                        VALUES($1, $2, $3, $4,NOW() + ($5 || ' days')::interval,NOW(),NOW(),$6,$7) RETURNING *`,
@@ -25,6 +31,13 @@ module.exports = {
     UPDATE_EXPIRY_LAB:`UPDATE lab_batch  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
     UPDATE_EXPIRY_LAB_CLOUDSLICE:`UPDATE cloudsliceorgassignment  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
     UPDATE_EXPIRY_LAB_SINGLEVMPROXMOX:`UPDATE singlevmproxmoxorgassignment  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
+    UPDATE_EXPIRY_LAB_SINGLEVMDATACENTER:`UPDATE singlevmdatacenterorgassignment  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
+    UPDATE_EXPIRY_LAB_VMCLUSTERDATACENTER:`UPDATE vmclusterdatacenterorgassignment  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
     UPDATE_EXTENSION_APPORREJ:`UPDATE lab_extension_requests SET status=$1,admin_note=$2 WHERE request_id=$3 RETURNING *`,
+   
+    CHECK_SINGLEVMDATACENTER_LAB_AVAILABILITY:` SELECT id
+        FROM datacenter_lab_user_credentials
+        WHERE labid = $1 AND orgassigned  is NULL and assigned_to is  NUll
+        `,
 }
     

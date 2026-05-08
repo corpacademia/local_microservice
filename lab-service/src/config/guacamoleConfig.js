@@ -16,21 +16,14 @@ const privateKey = fs.readFileSync(PEM_FILE_PATH, "utf8");
 // ---- CLIENT SIDE REQUEST ----
 const connectGuacamole = (req, res) => {
  try {
-     const { hostname, port, username, password, protocol = "rdp" } = req.body;
+    const hostname = req.body.hostname?.trim();
+  const port = req.body.port;
+  const username = req.body.username?.trim();
+  const password = req.body.password?.trim();
+  const protocol = req.body.protocol?.trim().toLowerCase() || "rdp";
      if (!hostname || !port) {
        return res.status(400).json({ success: false, message: "hostname and port required" });
      }
- 
-    //  const token = createToken(
-    //    {
-    //      protocol,
-    //      hostname,
-    //      port: Number(port),
-    //      username,
-    //      password,
-    //    },
-    //    TOKEN_TTL_MS
-    //  );
  
      // Return a ws path; frontend builds full url using same origin / port
      const connectionData = {
@@ -39,21 +32,27 @@ const connectGuacamole = (req, res) => {
       port: Number(port),
       username
     };
-   console.log("Username:",username);
     // 🪟 Windows (RDP)
     if (protocol === "rdp") {
       connectionData.password = password;
     }
 
     // Ubuntu (SSH with key)
-    if (protocol === "ssh" && privateKey) {
-      connectionData["private-key"] = privateKey.replace(/\\n/g, "\n");
+    // if (protocol === "ssh" && privateKey) {
+    //   connectionData["private-key"] = privateKey.replace(/\\n/g, "\n");
+    // }
+    if (protocol === "ssh") {
+      if (password?.length > 0) {
+        connectionData.password = password;
+      } else if (privateKey) {
+        connectionData["private-key"] = privateKey.replace(/\\n/g, "\n");
+        console.log(privateKey)
+      }
     }
-    console.log(privateKey)
+   
     const token = createToken(connectionData, TOKEN_TTL_MS);
      
      const wsPath = `/${protocol}?token=${token}`;
-     console.log(wsPath)
      return res.json({ success: true, token, wsPath });
    } catch (err) {
      console.error("Error /api/token:", err);

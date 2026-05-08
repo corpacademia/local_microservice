@@ -4,9 +4,13 @@ module.exports = {
     INSERT_TEMPLATE_INFORMATION: `INSERT INTO templateinformation (labid,templateid) values($1,$2) RETURNING *`,
     INSERT_ORG_ASSIGNMENT:`INSERT INTO singlevmproxmoxorgassignment (labid,orgid,startdate,enddate,assigned_by,user_id,vmname) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
     INSERT_SINGLEVM_USER_ASSIGNMENT:`INSERT INTO singlevmproxmoxuserassignment (labid,user_id,assigned_by,startdate,enddate,vmname,assignment_type,batch_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    INSERT_USER_CREDITS:`INSERT INTO user_credits(user_id,labid,total_minutes,remaining_minutes) VALUES($1,$2,$3,$4) `,
+    INSERT_LAB_SESSION:`INSERT INTO user_sessions(labid,user_id,starttime,isactive,type,instance_id,node) VALUES($1,$2,NOW(),$3,$4,$5,$6)`,
+    UPDATE_LAB_END_SESSION:`UPDATE user_sessions set isactive=$1, endtime=NOW() WHERE labid=$2 AND user_id=$3`,
 
     CHECK_ALREADY_ASSIGNED:`SELECT * FROM singlevmproxmoxuserassignment where user_id=$1 and labid=$2`,
 
+    GET_USERCREDITS_DATA:`SELECT * FROM user_credits WHERE user_id=$1 AND labid=$2`,
     GET_USER_DETAILS:`SELECT id, name 
         FROM users 
         WHERE id = $1
@@ -54,7 +58,7 @@ module.exports = {
     UPDATE_ORG_LAB_TIME:`UPDATE singlevmproxmoxorgassignment set startdate=$1,enddate=$2 where labid=$3 and orgid=$4  RETURNING *`,
     UPDATE_USER_LAB_TIME:`UPDATE singlevmproxmoxuserassignment set startdate=$1,enddate=$2 where labid=$3 and user_id=$4 RETURNING *`,
     UPDATE_USER_PURCHASED_LAB_TIME:`UPDATE singlevmproxmoxuserassignment set startdate=$1,enddate=$2 where labid=$3 and user_id=$4 RETURNING *`,
-    CREATE_SINGLEVM_CATALOGUE:`UPDATE singlevmproxmox_lab set cataloguename=$1,software=$2,cataloguetype=$3,level=$4,category=$5,price=$6 where labid=$7 RETURNING *`,
+    CREATE_SINGLEVM_CATALOGUE:`UPDATE singlevmproxmox_lab set cataloguename=$1,software=$2,cataloguetype=$3,level=$4,category=$5,price=$6,number_hours_day=$8 where labid=$7 RETURNING *`,
 
     DELETE_PROXMOX_LAB_CONFIG:`DELETE FROM proxmox_vm_details WHERE labid=$1`,
     DELETE_PROXMOX_LAB:`DELETE FROM singlevmproxmox_lab WHERE labid=$1`,

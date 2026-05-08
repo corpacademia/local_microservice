@@ -5,6 +5,7 @@ const batchesQueries = require('./batchesQueries');
 const {getUserEmail,getUserData} = require('./emailNotificationService');
 const path = require('path');
 const { sendNotificationToMail } = require('./notificationServices');
+const {api} = require('./proxmoxService')
 
 const Settings = async(userId,email,type,typeDescription,message,med,metadata)=>{
   try {
@@ -122,6 +123,58 @@ const updateUserCloudsliceModularLabStatus = async () => {
     client.release();
   }
 };
+
+const updateLabSessionTime = async()=>{
+     try {
+      // runs every 1 minute
+  console.log("Running credit deduction job");
+
+  const activeSessions = await pool.query(
+   labQueries.GET_ACTIVE_SESSIONS
+  );
+
+  for (const session of activeSessions.rows) {
+
+    // 1. Check if VM is running
+    // const isRunning = await checkEC2Status(session.instance_id);
+
+    // if (!isRunning) continue;
+
+    // 2. Deduct credits
+    await pool.query(
+      labQueries.UPDATE_REMAINING_TIME,
+      [session.user_id,session.labid]
+    );
+
+    // 3. Get updated credits
+    const credits = await pool.query(
+      labQueries.GET_CREDITS,
+      [session.user_id,session.labid]
+    );
+    const remaining = credits.rows[0]?.remaining_minutes ?? 0;
+
+    console.log(`User ${session.user_id} remaining: ${remaining}`);
+
+    // 4. If credits finished → STOP LAB
+    if (remaining <= 0) {
+      console.log(" Credits finished. Stopping Lab");
+
+    if(session.type === 'singlevm-proxmox'){
+       await api.post(
+      `/nodes/${session.node}/qemu/${session.instance_id}/status/stop`
+    );
+    }
+      await pool.query(
+        labQueries.UPDATE_SESSION,
+        [session.id]
+      );
+    }
+  }
+     } catch (error) {
+    console.error("Error in updating:", error);
+    await pool.query("ROLLBACK");
+  } 
+}
 
 //update cloudslice user lab status
 const updateUserCloudSliceLabStatus = async (
@@ -492,7 +545,13 @@ cron.schedule('*/1 * * * *', async () => {
     labType: 'singlevm-proxmox',
     ownerType: 'lab'
   });
+
 });
+
+//lab user session
+cron.schedule('*/1 * * * *',async () =>{
+  await updateLabSessionTime();
+})
 
 cron.schedule('*/1 * * * *', async () => {
   await expireLabsAndLog({

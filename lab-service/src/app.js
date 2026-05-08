@@ -10,6 +10,7 @@ const batchRouter = require('../src/routes/batchesRoutes');
 const credentialsRouter = require("../src/routes/cloudCredentialsRoutes");
 const fetchLabsRouter = require("../src/routes/fetchLabsRoutes");
 const purchaseRouter = require("../src/routes/purchaseRoutes");
+const subscriptionRouter = require("../src/routes/subscriptionRoutes")
 const path = require('path');
 const fs = require('fs');
 const mime = require('mime-types');
@@ -18,7 +19,7 @@ const {sessionMiddleware} = require('../src/config/session');
 require('dotenv').config();
 
 const app = express();
-const { handleStripeWebhook } = require('./controllers/labCartController'); 
+const { handleCashfreeWebhook } = require('./controllers/labCartController'); 
 
 //tables
 const tables = require('./db/labTables');
@@ -29,7 +30,7 @@ tables;
 // app.use(sessionMiddleware);
 
 // Mount it before any bodyParser middleware
-app.use('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
+app.use('/webhook', express.raw({ type: 'application/json' }), handleCashfreeWebhook);
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors({
@@ -75,6 +76,7 @@ app.use('/',batchRouter);
 app.use('/',credentialsRouter);
 app.use('/',fetchLabsRouter);
 app.use('/',purchaseRouter);
+app.use('/',subscriptionRouter)
 
 
 

@@ -260,7 +260,7 @@ const addUsersToBatch = async(req,res)=>{
                         continue;
                         }
 
-        const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [userId, labId,'batch',batchId]);
+        const creds = await pool.query(batchQueries.UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER, [userId, labId,null,'batch',batchId]);
         if (!creds.rows.length){
             return res.status(404).send({
                 success:false,
@@ -297,8 +297,8 @@ const addUsersToBatch = async(req,res)=>{
               }
               let groupCredsIdToUser;
                 groupCredsIdToUser = await pool.query(
-                  batchQueries.UPDATE_USER_GROUP_CREDS_TO_RANDOM_USER,
-                  [userId, labId,'batch',batchId]
+                  batchQueries.UPDATE_USER_GROUP_CREDS_TO_USER,
+                  [userId, labId,userDetails?.org_id,'batch',batchId]
                 );
               // console.log(groupCredsIdToUser)
               if (!groupCredsIdToUser.rows.length) {
@@ -325,7 +325,7 @@ const addUsersToBatch = async(req,res)=>{
                     message:`Could not assign lab ${labId} to user ${userdata.name}`
                 })
               }
-      }
+               }
 
                 await pool.query(batchQueries.UPDATE_BATCH_USER_TLAB,[1,userId]);
                 await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batchId,labId]);

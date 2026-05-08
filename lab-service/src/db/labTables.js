@@ -182,6 +182,19 @@ const createTables = async()=>{
               created_at TIMESTAMP DEFAULT NOW()
           );
           `)
+        //create table for global cloud
+        await pool.query(`
+              CREATE TABLE IF NOT EXISTS global_cloud_credentials (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+              provider TEXT NOT NULL,
+              name TEXT NOT NULL,
+              credentials JSONB NOT NULL,
+              created_by UUID,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+			        updated_at TIMESTAMPTZ
+          );
+          `)
         //create the lab_extension_request
         await pool.query(`
            CREATE TABLE IF NOT EXISTS lab_extension_requests (
@@ -201,6 +214,97 @@ const createTables = async()=>{
                   admin_note TEXT
             );
           `)
+
+          //single vm datacenter user purchase labs
+          await pool.query(`
+             CREATE TABLE IF NOT EXISTS singlevmdatacenter_purchased (
+                id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+                labid uuid,
+                user_id uuid,
+                assigned_by uuid,
+                assigned_at TIMESTAMPTZ DEFAULT NOW(),
+                status TEXT DEFAULT 'not-started',
+                startdate TIMESTAMPTZ DEFAULT NOW(),
+                enddate TIMESTAMPTZ,
+                isrunning BOOLEAN,
+                creds_id uuid,
+                payment_id uuid,
+                duration INTEGER
+            );
+            `)
+
+            //license key table
+            await pool.query(`
+              CREATE TABLE IF NOT EXISTS license_keys (
+                  id TEXT PRIMARY KEY,
+                  license_key TEXT UNIQUE NOT NULL,
+                  
+                  org_id TEXT NOT NULL,
+                  org_name TEXT,
+                  
+                  plan_tier TEXT NOT NULL,
+                  plan_name TEXT NOT NULL,
+                  
+                  billing_cycle TEXT CHECK (billing_cycle IN ('monthly', 'annual')),
+                  
+                  status TEXT CHECK (status IN ('active', 'expired', 'cancelled')),
+                  
+                  issued_at DATE NOT NULL,
+                  expires_at DATE NOT NULL,
+                  
+                  features JSONB NOT NULL, -- snapshot of plan at purchase time
+                  usage JSONB,
+                  
+                  created_at TIMESTAMP DEFAULT NOW()
+              );  
+              `)
+
+            //user session table
+            await pool.query(`
+              create table user_sessions(
+                id uuid primary key default uuid_generate_v4(),
+                labid uuid,
+                user_id uuid,
+                starttime Timestamptz,
+                endtime Timestamptz,
+                isactive boolean default false,
+                type TEXT,
+                instance_id TEXT,
+                node TEXT
+              )
+              `)
+
+            //user credits table
+            await pool.query(`
+              CREATE TABLE user_credits (
+              id uuid PRIMARY KEY default uuid_generate_v4(),
+              user_id uuid,
+              labid uuid,
+              total_minutes INT ,
+              remaining_minutes INT ,
+              updated_at TIMESTAMPTZ DEFAULT NOW()
+          );
+              `)
+
+            //create vmcluster purchased for user
+            await pool.query(`
+              CREATE TABLE IF NOT EXISTS vmclusterdatacenter_purchased (
+                id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+                labid uuid,
+                user_id uuid
+                assigned_by uuid,
+                status text DEFAULT 'not-started',
+                startdate timestamptz,
+                enddate timestamptz,
+                isrunning boolean DEFAULT false,
+                group_creds_id uuid,
+                assigned_at timestamptz DEFAULT NOW(),
+                assignment_type text,
+                batch_id uuid,
+                purchased boolean default false,
+                purchased_id uuid
+              );
+              `)
 
            //create the table to store the organization cloud credentials
         await pool.query(`

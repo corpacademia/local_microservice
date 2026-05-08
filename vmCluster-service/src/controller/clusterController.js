@@ -202,14 +202,14 @@ const updateUserVM = async(req,res)=>{
 //update the catalogue details
  const updateCatalogueDetails = async(req,res)=>{
     try {
-        const {catalogueName,catalogueType,software,labId,level,category,price} = req.body;
+        const {catalogueName,catalogueType,software,labId,level,category,price,hoursPerDay} = req.body;
         if(!catalogueName || !catalogueType || !labId || !level || !category || !price){
             return res.status(400).send({
                 success:false,
                 message:"Please provide all the required fields"
             })
         }
-        const result = await clusterService.updateVMClusterDatacenterCatalogueDetails(catalogueName,catalogueType,software,labId,level,category,price);
+        const result = await clusterService.updateVMClusterDatacenterCatalogueDetails(catalogueName,catalogueType,software,labId,level,category,price,hoursPerDay);
         if(!result || !result.rows.length){
             return res.status(404).send({
                 success:false,
@@ -388,8 +388,8 @@ const updateUserVMClusterDatacenterStatus = async (req, res) => {
 
     try {
         console.log(req.body);
-        const { labId, userId, status } = req.body;
-        const result = await clusterService.updateUserVMClusterDatacenterStatus(labId, userId, status);
+        const { labId, userId, status ,purchased=false} = req.body;
+        const result = await clusterService.updateUserVMClusterDatacenterStatus(labId, userId, status,purchased);
         if (!result) {
             return res.status(404).send({
                 success: false,
@@ -416,6 +416,32 @@ const getUserAssignedDatacenterLabs = async(req,res)=>{
     try {
         const {userId} = req.params;
         const result = await clusterService.getUserAssignedDatacenterLabs(userId);
+        if(!result){
+            return res.status(404).send({
+                success:false,
+                message:"No labs found for the user"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the user assigned labs",
+            data:result
+        })
+    } catch (error) {
+        console.log("Error in getting user assigned datacenter labs:", error.message);
+        return res.status(500).send({
+            success:false,
+            message:"Error in getting user assigned datacenter labs",
+            error:error.message
+        })
+    }
+}
+
+//get user assigned datancenter labs
+const getUserPurchasedDatacenterLabs = async(req,res)=>{
+    try {
+        const {userId} = req.params;
+        const result = await clusterService.getUserPurchasedDatacenterLabs(userId);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -492,8 +518,8 @@ const deleteDatacenterLabFromOrg = async(req,res)=>{
 //delete datacenter lab of user
 const deleteDatacenterLabOfUser = async(req,res)=>{
     try {
-        const {labId,orgId,userId} = req.body;
-        const result = await clusterService.deleteDatacenterLabOfUser(labId,orgId,userId);
+        const {labId,orgId,userId,purchased=false} = req.body;
+        const result = await clusterService.deleteDatacenterLabOfUser(labId,orgId,userId,purchased);
         if(!result){
             return res.status(400).send({
                 success:false,
@@ -534,5 +560,6 @@ module.exports = {
     getVMClusterDatacenterlabDetails,
     updateUserLabTimingsOfVMClusterDatacenter,
     updateCatalogueDetails,
-    updateUserVMClusterDatacenterStatus
+    updateUserVMClusterDatacenterStatus,
+    getUserPurchasedDatacenterLabs
 }

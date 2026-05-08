@@ -633,7 +633,7 @@ const createVM = async (req, res) => {
     );
   const upid = cloneResp.data.data;
     if(type === 'org'){
-      await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,true,labid,userid])
+      await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,labid,userid,true])
     }
     else{
     await pool.query(proxmoxQueries.UPDATE_LAUNCH_LOADING,[true,vmdetails_id,false]);
@@ -710,8 +710,8 @@ if (storage && Number(storage) > 0) {
 //create user vn
 const createUserVm = async (req,res)=>{
   try {
-    const {labid,name,type,purchased,userid,vmdetailsId} = req.body;
-    if(!labid||!name||!type||!userid){
+    const {labid,name,type,purchased,userid,vmdetailsId,duration,number_hours_day} = req.body;
+    if(!labid||!name||!type||!userid ||!duration){
       return res.status(400).send({
         success:false,
         message:'Please provide all required fields'
@@ -732,7 +732,8 @@ const createUserVm = async (req,res)=>{
     const node = vmDetails?.node;
     await pool.query('BEGIN')
      if(type=='user' && purchased){
-      await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED_LOADING,[true,labid,userid])
+      await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED_LOADING,[true,labid,userid]);
+
     }
     else{
       await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_LOADING,[true,labid,userid]);
@@ -775,8 +776,11 @@ if (taskStatus.exitstatus !== "OK") {
 
 
    if(type === 'user' && purchased){
+      const totalMinutes = duration * number_hours_day * 60;
       await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED,[true,labid,vmid,duration]);
-      await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED_LOADING,[false,labid,userid])
+      await pool.query(promoxQueries.UPDATE_LAUNCH_USER_PURCHASED_LOADING,[false,labid,userid]);
+      await pool.query(proxmoxQueries.INSERT_USER_CREDITS,[userid,labid,totalMinutes,totalMinutes]);
+
     }
     else{
       await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER,[true,labid,vmid,userid,node])
@@ -902,21 +906,21 @@ async function configureWindowsVM(node, vmid, username, password) {
   });
 }
 
-async function getVmIP(node, vmid) {
-  const resp = await api.get(`/nodes/${node}/qemu/${vmid}/agent/network-get-interfaces`);
+// async function getVmIP(node, vmid) {
+//   const resp = await api.get(`/nodes/${node}/qemu/${vmid}/agent/network-get-interfaces`);
 
-  for (const iface of resp.data.data.result) {
-    if (!iface["ip-addresses"]) continue;
+//   for (const iface of resp.data.data.result) {
+//     if (!iface["ip-addresses"]) continue;
 
-    for (const ip of iface["ip-addresses"]) {
-      if (ip["ip-address"] && ip["ip-address"] !== "127.0.0.1" && ip["ip-address"].includes(".")) {
-        return ip["ip-address"];
-      }
-    }
-  }
+//     for (const ip of iface["ip-addresses"]) {
+//       if (ip["ip-address"] && ip["ip-address"] !== "127.0.0.1" && ip["ip-address"].includes(".")) {
+//         return ip["ip-address"];
+//       }
+//     }
+//   }
 
-  throw new Error("Unable to detect VM IP.");
-}
+//   throw new Error("Unable to detect VM IP.");
+// }
 
 //start vm
 // const startVM = async (req,res)=>{
@@ -965,9 +969,49 @@ async function getVmIP(node, vmid) {
 //   }
 // }
 // Prepare VM After Clone - Works for BOTH Windows & Linux
+
+async function getVmIP(node, vmid) {
+  const maxRetries = 15;
+  const delay = 3000;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const resp = await api.get(
+        `/nodes/${node}/qemu/${vmid}/agent/network-get-interfaces`
+      );
+
+      for (const iface of resp.data.data.result) {
+        if (!iface["ip-addresses"]) continue;
+
+        for (const ip of iface["ip-addresses"]) {
+          if (
+            ip["ip-address"] &&
+            ip["ip-address"] !== "127.0.0.1" &&
+            ip["ip-address"].includes(".")
+          ) {
+            return ip["ip-address"];
+          }
+        }
+      }
+
+    } catch (err) {
+      if (err?.response?.status === 500) {
+        console.log(` Agent not ready (attempt ${i + 1})`);
+      } else {
+        throw err;
+      }
+    }
+
+    await new Promise(r => setTimeout(r, delay));
+  }
+
+  throw new Error("VM agent not ready after retries...");
+}
+
 const startVM = async (req, res) => {
   try {
      const { lab_id,node, vmid,type,userid,purchased,vmDetailsId } = req.body;
+     
      if(!lab_id ||!node ||!vmid||!type||!userid){
       return res.status(400).send({
         success:false,
@@ -981,12 +1025,21 @@ const startVM = async (req, res) => {
     );
 
     const status = statusResp.data.data.status;
+    const getSession = await pool.query(promoxQueries.GET_USERCREDITS_DATA,[userid,lab_id]);
+    if(getSession?.rows[0]?.remaining_minutes <= 0){
+      return res.status(404).send({
+        success:false,
+        message:"Lab time exceeded"
+      })
+    }
     if(status === 'stopped'){
       //start vm
       await api.post(`/nodes/${node}/qemu/${vmid}/status/start`);}
+     
       await pool.query('BEGIN');
      if(type === 'user' && purchased){
       await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_PURCHASED_RUNNING,[true,lab_id,userid]);
+      await pool.query(promoxQueries.INSERT_LAB_SESSION,[lab_id,userid,true,'singlevm-proxmox',vmid,node]);
      }
      else if(type === 'org'){
       await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[true,lab_id,userid,true])
@@ -997,7 +1050,7 @@ const startVM = async (req, res) => {
      else{
        await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_RUNNINGSTATUS,[true,lab_id,userid,'started'])
      }
-     
+     await pool.query('COMMIT');
     const hostname = await getVmIP(node,vmid);
     const osInfo = await detectOSFromProxmox(node, vmid);
     const os = osInfo?.os ?? null;
@@ -1007,7 +1060,7 @@ const startVM = async (req, res) => {
         message:"Could no get hostname and protocol"
       })
     }
-    await pool.query('COMMIT');
+    
     return res.status(200).send({
       success:true,
       message:"Successfully started vm.Ready to connect",
@@ -1037,7 +1090,7 @@ const stopVM = async (req, res) => {
   const { lab_id,node, vmid,userid,purchased ,type,vmdetails_id} = req.body;
 
   try {
-    // 🔍 Validation
+    //  Validation
     if (!node || !vmid ||!lab_id||!userid) {
       return res.status(400).send({
         success: false,
@@ -1073,7 +1126,7 @@ const stopVM = async (req, res) => {
       const task = await api.get(
         `/nodes/${node}/tasks/${upid}/status`
       );
-
+    await pool.query(promoxQueries.UPDATE_LAB_END_SESSION,[false,lab_id,userid]);
       if (task.data.data.status === "stopped") break;
       await new Promise(r => setTimeout(r, 2000));
     }
@@ -2070,6 +2123,8 @@ const deleteSingleVMProxmoxUser = async(req,res)=>{
         message:"Could not delete the lab"
       })
     }
+    await pool.query(labQueries.DELETE_USER_CREDITS,[userId,labId]);
+    await pool.query(labQueries.DELETE_USER_SESSIONS,[userId,labId]);
     return res.status(200).send({
       success:true,
       message:"Successfully deleted lab",
@@ -2094,14 +2149,14 @@ const createSingleVmProxmoxCatalogue = async(req,res)=>{
         labId,
         level,
         category,
-        price} = req.body;
-        if(!catalogueName || !software || !catalogueType || !labId || !level || !category ||!price){
+        price,hoursPerDay} = req.body;
+        if(!catalogueName || !software || !catalogueType || !labId || !level || !category ||!price ||!hoursPerDay){
           return res.status(404).send({
             success:false,
             message:'Plese provide all the required fields'
           })
         }
-      const createCatalogue = await pool.query(proxmoxQueries.CREATE_SINGLEVM_CATALOGUE,[catalogueName,software,catalogueType,level,category,price,labId]);
+      const createCatalogue = await pool.query(proxmoxQueries.CREATE_SINGLEVM_CATALOGUE,[catalogueName,software,catalogueType,level,category,price,labId,hoursPerDay]);
       if(!createCatalogue.rows.length){
         return res.status(404).send({
           success:false,
@@ -2158,5 +2213,6 @@ module.exports = {
     createUserVm,
     stopVM,
     deleteVMOFProxmox,
-    getLabAdminsLab
+    getLabAdminsLab,
+    api
 }

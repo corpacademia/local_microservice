@@ -317,11 +317,14 @@ module.exports ={
       sd.enddate AS end_date,
       'singlevm-datacenter' AS type,
       COALESCE(sdoa.purchased, false) AS purchased,
-      NULL AS quantity
+     COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
     FROM singlevmdatacenter_lab sd
     LEFT JOIN singlevmdatacenterorgassignment sdoa
       ON sdoa.labid = sd.lab_id
       AND sdoa.orgid = $2
+    LEFT JOIN lab_batch_purchased lbp
+      ON lbp.lab_id = sd.lab_id
+      AND lbp.org_id = $2
     WHERE
       $3 = true
       OR sd.user_id = $1
@@ -338,11 +341,14 @@ module.exports ={
       vc.enddate AS end_date,
       'vmcluster-datacenter' AS type,
       COALESCE(vcoa.purchased, false) AS purchased,
-      NULL AS quantity
+      COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
     FROM vmclusterdatacenter_lab vc
     LEFT JOIN vmclusterdatacenterorgassignment vcoa
       ON vcoa.labid = vc.labid
       AND vcoa.orgid = $2
+     LEFT JOIN lab_batch_purchased lbp
+      ON lbp.lab_id = vc.labid
+      AND lbp.org_id = $2
     WHERE
       $3 = true
       OR vc.user_id = $1
@@ -409,8 +415,11 @@ SELECT
     sd.startdate AS start_date,
     sd.enddate AS end_date,
     'singlevm-datacenter' AS type,
-    NULL AS quantity
+     COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
 FROM singlevmdatacenter_lab sd
+LEFT JOIN lab_batch_purchased lbp
+    ON lbp.lab_id = sd.lab_id
+    AND lbp.org_id = $2
 WHERE sd.lab_id = $1::uuid
 
 UNION ALL
@@ -423,11 +432,13 @@ SELECT
     vc.startdate AS start_date,
     vc.enddate AS end_date,
     'vmcluster-datacenter' AS type,
-    NULL AS quantity
-FROM vmclusterdatacenter_lab vc
-WHERE vc.labid = $1::uuid
-
-   `,
+    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
+    FROM vmclusterdatacenter_lab vc
+    LEFT JOIN lab_batch_purchased lbp
+        ON lbp.lab_id = vc.labid
+        AND lbp.org_id = $2
+    WHERE vc.labid = $1::uuid
+`,
 
     CHECK_BATCH_USER_ALREADY_EXIST:`SELECT * FROM batch_users WHERE user_id=$1 AND batch_id=$2`,
     CHECK_BATCHLAB_ALREADY:`SELECT * FROM batchlabs WHERE lab_id=$1 and batch_id=$2`,

@@ -723,9 +723,9 @@ const getCount = async () => {
     }
 }
 //update the catalogue details
-const updateCatalogueDetails = async(catalogueName,catalogueType,labId,level,category,price)=>{
+const updateCatalogueDetails = async(catalogueName,catalogueType,labId,level,category,price,hoursPerDay)=>{
     try {
-        const catalogueUpdate = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB,[catalogueName,catalogueType,labId,level,category,price]);
+        const catalogueUpdate = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB,[catalogueName,catalogueType,labId,level,category,price,hoursPerDay]);
         if(!catalogueUpdate.rows.length){
             return [];
         }

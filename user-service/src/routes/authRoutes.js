@@ -27,7 +27,8 @@ const {
     verifyEmailCode,
     uploadBulkUsers,
     userApprove,
-    resetPassword
+    resetPassword,
+    getTrainersFromOrganization
 } = require('../controllers/authController');
 
 //api router
@@ -63,6 +64,8 @@ router.get('/user_profile', getTokenAndGetUserDetails, (req, res) => {
 router.post('/logout',logoutController);
 router.put('/updateUser/:id',updateUserController);
 router.get('/getUsersFromOrganization/:orgId',getUsersFromOrganization);
+router.get('/getTrainers/:orgId',getTrainersFromOrganization);
+
 router.post('/deleteOrganizationUsers',deleteUsers);
 router.put('/updateUserFromSuperadmin/:id',updateUser);
 router.post('/insertUsers',insertUsers);

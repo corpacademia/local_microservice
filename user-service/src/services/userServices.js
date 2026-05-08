@@ -731,6 +731,20 @@ const updateUserRole = async (userId, role) => {
   
     return users;
   };
+
+  //get trainers of organization
+   const getTrainersFromOrganization = async (orgId) => {
+    const [usersResult, orgUsersResult] = await Promise.all([
+      pool.query(userQueries.GET_USERS_FROM_ORG, [orgId]),
+      pool.query(userQueries.GET_ORG_USERS_ORGID, [orgId]),
+    ]);
+  
+    let users = [...usersResult.rows, ...orgUsersResult.rows];
+    users = users.filter((users)=>users.role === 'trainer')
+    if (users.length === 0) throw new Error("No users found for this organization");
+  
+    return users;
+  };
   
   const deleteUsers = async (orgId, userIds) => {
     if (!Array.isArray(userIds) || userIds.length === 0)
@@ -1038,5 +1052,6 @@ module.exports = {
   verifyEmailCode,
   bulkAddUser,
   userApprove,
-  resetPassword
+  resetPassword,
+  getTrainersFromOrganization
  };

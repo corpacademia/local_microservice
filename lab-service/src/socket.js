@@ -46,4 +46,9 @@ function cataloguePurchaseUpdate({orgId,data}){
   publisher.publish("cataloguePurchase",message)
 }
 
-module.exports = { sendNotification, cataloguePurchaseUpdate };
+function extensionRequestUpdate({orgId,data}){
+  const message = JSON.stringify({orgId,data});
+  publisher.publish("extensionRequest",message)
+}
+
+module.exports = { sendNotification, cataloguePurchaseUpdate,extensionRequestUpdate };

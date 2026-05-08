@@ -127,7 +127,7 @@ module.exports = {
   //update exercise main content
   UPDATE_LAB_EXERCISE_CONTENT_ON_EXERCISE_ID:`UPDATE lab_exercises SET instructions=$1, services=$2, files=$3,  cleanuppolicy=$4 WHERE exercise_id = $5 RETURNING *`,
   //update the catalogue in cloudslicelab
-  UPDATE_CLOUDSLICELAB:`UPDATE cloudslicelab set cataloguename=$1,cataloguetype=$2,level=$4,category=$5,price=$6 where labid=$3 RETURNING *`,
+  UPDATE_CLOUDSLICELAB:`UPDATE cloudslicelab set cataloguename=$1,cataloguetype=$2,level=$4,category=$5,price=$6,number_hours_day=$7 where labid=$3 RETURNING *`,
   UPDATE_CLOUDSLICELAB_STATUS:`UPDATE cloudslicelab set status=$1 ,launched=$2 where labid=$3 and  createdby=$4 RETURNING *`,
   UPDATE_CLOUDSLICELAB_ORG_STATUS:`UPDATE cloudsliceorgassignment set status=$1 ,launched=$2 where labid=$3 and orgid=$4 Returning *`,
   UPDATE_CLOUDSLICELAB_USER_STATUS:'UPDATE cloudsliceuserassignment set status=$1, launched=$2 where labid=$3 and user_id=$4 Returning *',

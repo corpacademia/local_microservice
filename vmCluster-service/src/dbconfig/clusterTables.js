@@ -21,7 +21,9 @@ const createTables = async()=>{
             userguide TEXT[],
             startdate TIMESTAMP,
             enddate TIMESTAMP,
-            cataloguetype TEXT DEFAULT 'private'
+            cataloguetype TEXT DEFAULT 'private',
+            purchased boolean default false,
+            purchased_id uuid
             );
 
             `

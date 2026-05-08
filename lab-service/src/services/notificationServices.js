@@ -19,7 +19,7 @@ const {
 require("dotenv").config();
 
 const sendNotificationToMail = async (template, placeholders) => {
- 
+  console.log("Notification of email is working")
   // Load HTML template
   const htmlTemplate = fs.readFileSync(template, 'utf8');
 
@@ -40,8 +40,8 @@ const sendNotificationToMail = async (template, placeholders) => {
 
   const mailOptions = {
     from: process.env.EMAIL_USER,
-    to: placeholders.email,
-    subject: placeholders.subject || placeholders.title,
+    to: placeholders?.email,
+    subject: placeholders?.subject || placeholders?.title,
     html: populatedTemplate
   };
 

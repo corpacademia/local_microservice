@@ -191,6 +191,18 @@ const deleteOrganizationsService = async (orgIds) => {
         throw error;
     }
 };
+//update the organization cloud
+const bringYourOwnCloud = async(orgId,bring_your_own_cloud)=>{
+    try {
+        const update = await pool.query(organizationQueries.UPDATE_CLOUD_ACCOUNT,[bring_your_own_cloud,orgId]);
+        if(!update.rows.length)
+            throw new Error("Could not update")
+        
+        return update;
+    } catch (error) {
+        throw error;
+    }
+}
 
 
 module.exports = {
@@ -202,5 +214,6 @@ module.exports = {
     updateOrganizationService,
     deleteOrganizationsService,
     updateOrganizationAdmin,
-    approveOrRejectOrg
+    approveOrRejectOrg,
+    bringYourOwnCloud
 }

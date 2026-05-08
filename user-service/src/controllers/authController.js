@@ -408,6 +408,18 @@ const updateUserRole = async (req, res) => {
       return res.status(404).send({ success: false, message:"Error in getting user details",error: error.message });
     }
   };
+
+  //get trainers from organization
+   const getTrainersFromOrganization = async (req, res) => {
+    try {
+      const { orgId } = req.params;
+      const users = await userServices.getTrainersFromOrganization(orgId);
+      return res.status(200).send({ success: true, message: "Users retrieved successfully", data: users });
+    } catch (error) {
+      console.log("error",error)
+      return res.status(404).send({ success: false, message:"Error in getting user details",error: error.message });
+    }
+  };
   
   const deleteUsers = async (req, res) => {
     try {
@@ -564,5 +576,6 @@ module.exports={
     verifyEmailCode,
     uploadBulkUsers,
     userApprove,
-    resetPassword
+    resetPassword,
+    getTrainersFromOrganization
 }

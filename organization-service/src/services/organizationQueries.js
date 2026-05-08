@@ -50,4 +50,5 @@ module.exports = {
     UPDATE_ORGANIZATION_ADMIN:`UPDATE organizations set org_admin=$1 where id=$2 RETURNING *`,
     UPDATE_ORGANITION_STATUS:`UPDATE organizations set status=$1 where id =$2 RETURNING *`,
     UPDATE_ADMIN_STATUS:`UPDATE users SET status = $1 WHERE org_id = $2 AND role = $3`,
+    UPDATE_CLOUD_ACCOUNT:`UPDATE organizations SET bring_your_own_cloud=$1 WHERE id=$2 RETURNING *`
 };

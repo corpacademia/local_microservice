@@ -771,14 +771,14 @@ const updateCloudSliceLab = async(req,res)=>{
 //update catalogue details
 const updateCatalogueDetails = async(req,res)=>{
     try {
-        const {catalogueName,catalogueType,labId,level,category,price} = req.body;
-        if(!catalogueName || !catalogueType ||!labId || !level || !category ){
+        const {catalogueName,catalogueType,labId,level,category,price,hoursPerDay} = req.body;
+        if(!catalogueName || !catalogueType ||!labId || !level || !category || !hoursPerDay){
             return res.status(404).send({
                 success:false,
                 message:"Please provide all the required fields"
             })
         }
-        const result = await cloudSliceAwsService.updateCatalogueDetails(catalogueName,catalogueType,labId,level,category,price);
+        const result = await cloudSliceAwsService.updateCatalogueDetails(catalogueName,catalogueType,labId,level,category,price,hoursPerDay);
         if(!result || result.length === 0){
             return res.status(400).send({
                 success:false,

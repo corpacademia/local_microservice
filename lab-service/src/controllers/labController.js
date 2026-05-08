@@ -194,9 +194,36 @@ const getDatacenterLabOnAdminId = async (req, res) => {
         const { adminId } = req.body;
         const result = await labService.getDatacenterLabsOnAdminId(adminId);
         if (!result || result.length === 0) {
-            return res.status(404).send({
-                success: false,
+            return res.status(200).send({
+                success: true,
                 message: "No datacenter labs found for the provided adminId",
+                data:[]
+            });
+        }
+        return res.status(200).send({
+            success: true,
+            message: "Successfully accessed datacenter labs",
+            data: result,
+        });
+    } catch (error) {
+        console.log("Error:",error)
+        return res.status(500).send({
+            success: false,
+            message: "Error in getting the datacenter labs",
+            error: error.message,
+        });
+    }
+}
+
+const getDatacenterLabAdminsLab = async()=>{
+      try {
+        const { adminIds } = req.body;
+        const result = await labService.getDatacenterLabAdminsLab(adminIds);
+        if (!result || result.length === 0) {
+            return res.status(200).send({
+                success: true,
+                message: "No datacenter labs found for the provided adminId",
+                data:[]
             });
         }
         return res.status(200).send({
@@ -307,14 +334,15 @@ const getDatacenterLabCredentials = async (req, res) => {
 //update single vm datacenter lab
 const updateSingleVmDatacenterLab = async (req, res) => {
     try {
-        const { software, catalogueType, labId,catalogueName,level,category,price } = req.body;
-        if (!software || !catalogueType || !labId ||!catalogueName || !level || !category || !price) {
+        console.log(req.body)
+        const { software, catalogueType, labId,catalogueName,level,category,price,hoursPerDay } = req.body;
+        if (!software || !catalogueType || !labId ||!catalogueName || !level || !category || !price || !hoursPerDay) {
             return res.status(400).send({
                 success: false,
                 message: "Software, catalogueType, and labId are required",
             });
         }
-        const result = await labService.updateSingleVmDatacenterLab(labId,software, catalogueType,catalogueName,level,category,price); 
+        const result = await labService.updateSingleVmDatacenterLab(labId,software, catalogueType,catalogueName,level,category,price,hoursPerDay); 
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
@@ -365,6 +393,33 @@ const getAllLabCatalogues = async (req, res) => {
         });
     }
 }
+//get all org labs
+const getAllOrgLabs = async(req,res)=>{
+    try {
+        const {orgId} = req.body;
+        if(!orgId){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide the required fields"
+            })
+        }
+        const result = await labService.getAllOrganizationLabs(orgId);
+        if(!result) return [];
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the labs",
+            data:result
+        })
+    } catch (error) {
+        console.log("Error:",error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
+
 //get user purchased single vm labs
 const getUserPurchasedSinglvmLabs = async (req, res) => {
     try {
@@ -535,15 +590,15 @@ const updateCatalogueDetails = async (req, res) => {
 //update single vm datacenter user creds running state
 const updateSingleVMDatacenterUserCredRunningState = async (req, res) => {
     try {
-        console.log(req.body)
-        const { isrunning, userId, labId } = req.body;
+        const { isrunning, userId, labId, purchased=false,hoursPerDay,duration } = req.body;
+        
         if (!userId || !labId ) {
             return res.status(400).send({
                 success: false,
                 message: "Please Provide All The Required Fields",
             });
         }
-        const result = await labService.updateSingleVMDatacenterUserCredRunningState(isrunning, userId, labId); 
+        const result = await labService.updateSingleVMDatacenterUserCredRunningState(isrunning, userId, labId,purchased,hoursPerDay,duration); 
         if (!result || result.length === 0) {
             return res.status(404).send({
                 success: false,
@@ -596,14 +651,15 @@ const updateSingleVMDatacenterUserCredRunningState = async (req, res) => {
 //delete single vm datacenter lab of user
 const deleteSingleVMDatacenterLabOfUser = async (req,res)=>{
     try {
-        const { labId,userId } = req.body;
+        const { labId,userId,purchased } = req.body;
         if(!labId || !userId){
             return res.status(404).send({
                 success:false,
                 message:"Please Provide the required fields"
             })
         }
-        const result = labService.deleteSingleVMDatacenterLabForUser(labId,userId);
+        
+        const result = labService.deleteSingleVMDatacenterLabForUser(labId,userId,purchased);
         if(!result){
             return res.status(400).send({
                 success:false,
@@ -1005,6 +1061,38 @@ const getUserAssignedSingleVMDatacenterLabs = async(req,res)=>{
             return res.status(400).send({
                 success:false,
                 message:'No Labs found for this user'
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully accessed the labs",
+            data:result
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Error in getting the single vm datacenter lab",
+            error:error.message
+        })
+    }
+}
+
+const getUserPurchasedSingleVMDatacenterLabs = async(req,res)=>{
+    try {
+        const {userId} = req.params;
+        if(!userId){
+            return res.status(404).send({
+                success:false,
+                message:"Please Provide the user id"
+            })
+        }
+        const result =  await labService.getUserPurchasedSingleVMDatacenterLabs(userId);
+        if(!result){
+            return res.status(200).send({
+                success:true,
+                message:'No Labs found for this user',
+                data:[]
             })
         }
         return res.status(200).send({
@@ -1825,5 +1913,8 @@ module.exports = {
     getAllOrganizationAssignedLabs,
     getAllLabs,
     getLabsOfLabadmins,
-    updateUserLabCompletedStatus
+    updateUserLabCompletedStatus,
+    getUserPurchasedSingleVMDatacenterLabs,
+    getAllOrgLabs,
+    getDatacenterLabAdminsLab
 }

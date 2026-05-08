@@ -297,9 +297,9 @@ const updateVMClusterDatacenterLab = async(labId , title ,description ,startDate
 
 }
 //update vmcluster datacente catalogue details
-const updateVMClusterDatacenterCatalogueDetails = async(catalogueName,catalogueType,software,labId,level,category,price)=>{
+const updateVMClusterDatacenterCatalogueDetails = async(catalogueName,catalogueType,software,labId,level,category,price,hoursPerDay)=>{
     try {
-      const updateCatalogue = await pool.query(clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB,[catalogueName,catalogueType,software,labId,level,category,price]);
+      const updateCatalogue = await pool.query(clusterQueries.UPDATE_VMCLUSTER_DATACENTER_LAB,[catalogueName,catalogueType,software,labId,level,category,price,hoursPerDay]);
       if(!updateCatalogue.rows.length){
         return [];
       }
@@ -410,11 +410,10 @@ const getAllTheOrganizationLabs = async (orgId,admin_id)=>{
     }
     let labRows = [];
     let labs = [];
-
 for (const org of orgLabs.rows) {
   const labDetailsResult = await pool.query(clusterQueries.GET_ALL_LABS_ON_LABID, [org.labid]);
+  if(!labDetailsResult.rows.length) return [];
   const lab = labDetailsResult.rows[0];
-
   const [vmDetailsResult, userVmResult] = await Promise.all([
     pool.query(clusterQueries.GET_VM_DETAILS_ON_LABID, [lab.labid]),
     pool.query(clusterQueries.GET_ALL_USERVM_CREDS_FOR_ID, [lab.labid, orgId])
@@ -444,7 +443,6 @@ const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate, o
  
     const client = await pool.connect();
     await client.query('BEGIN');
-
 
     const userIdArray = Array.isArray(userIds) ? userIds : [userIds];
     
@@ -513,6 +511,22 @@ const getUserAssignedDatacenterLabs = async (userId) => {
   }
 };
 
+//get user purchased datacenter labs
+const getUserPurchasedDatacenterLabs = async (userId) => {
+  try {
+    if (!userId) {
+      throw new Error("Please provide the user id");
+    }
+    const userLabs = await pool.query(clusterQueries.GET_USER_PURCHASED_LABS_VMCLUSTERDATACENTER, [userId]);
+    if (!userLabs.rows.length) {
+      return [];
+    }
+    return userLabs.rows;
+  } catch (error) {
+    console.error("Error in getting user purchased datacenter labs:", error);
+    throw new Error("Error in getting user purchased datacenter labs: " + error.message);
+  }
+};
 //get the user credentials for user
 const gerUserCredentialsForUser = async(labId,userId)=>{
   try {
@@ -596,12 +610,18 @@ const updateUserLabTimingsOfVMClusterDatacenter = async(labId,identifier,startTi
 }
 
 //update user vmcluster datacenter lab status
-const updateUserVMClusterDatacenterStatus = async(labId,userId,status)=>{
+const updateUserVMClusterDatacenterStatus = async(labId,userId,status,purchased)=>{
     try {
         if(!labId || !userId || !status){
             throw new Error("Please provide the lab id, user id and status");
         }
-        const response = await pool.query(clusterQueries.UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS,[status,labId,userId]);
+        let response;
+        if(purchased){
+          response = await pool.query(clusterQueries.UPDATE_USER_VMCLUSTER_DATACENTER_USER_PURCHASED_STATUS,[status,labId,userId])
+        }
+        else{
+           response = await pool.query(clusterQueries.UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS,[status,labId,userId]);
+        }
         if(!response.rows.length){
             throw new Error("No lab found for this user");
         }
@@ -613,7 +633,7 @@ const updateUserVMClusterDatacenterStatus = async(labId,userId,status)=>{
 }
 
 //DELETE USER ASSIGNED DATACENTER LAB
-const deleteDatacenterLabOfUser = async (labId,orgId, userId) => {
+const deleteDatacenterLabOfUser = async (labId,orgId, userId,purchased) => {
     try {
         console.log(labId,orgId, userId)
         if (!labId || !userId) {
@@ -628,7 +648,10 @@ const deleteDatacenterLabOfUser = async (labId,orgId, userId) => {
           await pool.query(clusterQueries.DELETE_USER_CREDS,[labId, userId, orgId]);
         }
         // Delete user assignment
-        await pool.query(clusterQueries.DELETE_USER_DATACENTER_LAB, [labId, userId]);
+        if(purchased)
+            await pool.query(clusterQueries.DELETE_USER_PURCHASED_DATACENTER_LAB,[labId,userId]);
+        else
+           await pool.query(clusterQueries.DELETE_USER_DATACENTER_LAB, [labId, userId]);
         
         await pool.query('COMMIT');
         return true;
@@ -659,5 +682,6 @@ module.exports = {
     getVMClusterDatacenterlabDetails,
     updateUserLabTimingsOfVMClusterDatacenter,
     updateVMClusterDatacenterCatalogueDetails,
-    updateUserVMClusterDatacenterStatus
+    updateUserVMClusterDatacenterStatus,
+    getUserPurchasedDatacenterLabs
 };

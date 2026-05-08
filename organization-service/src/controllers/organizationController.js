@@ -1,5 +1,6 @@
 const { UPDATE_ADMIN_STATUS } = require('../services/organizationQueries');
 const organizationServices = require('../services/organizationService');
+const {bringYourOwnCloudUpdate} = require('../socket');
 
 
 const organizations = async (req, res) => {
@@ -283,6 +284,37 @@ const deleteOrganization = async (req, res) => {
     }
 };
 
+const bringYourOwnCloud = async(req,res)=>{
+    try {
+        const {orgId,bring_your_own_cloud} = req.body;
+        if(!orgId){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide the required fields"
+            })
+        }
+        const update = await organizationServices.bringYourOwnCloud(orgId,bring_your_own_cloud);
+        if(!update.rows.length){
+            return res.status(404).send({
+                success:false,
+                message:"Could not update"
+            })
+        }
+        await bringYourOwnCloudUpdate({orgId:orgId,data:update.rows[0]});
+        return res.status(200).send({
+            success:true,
+            message:"Successfully updated",
+            data:update.rows
+        })
+    } catch (error) {
+        console.log("Error:",error);
+        return res.status(500).send({
+            success:true,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
 
 
 module.exports = {
@@ -294,6 +326,6 @@ module.exports = {
     editOrganizationModal,
     deleteOrganization,
     updateOrganizationAdmin,
-    approveOrRejectOrg
-
+    approveOrRejectOrg,
+    bringYourOwnCloud
 }

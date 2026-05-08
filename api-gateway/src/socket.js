@@ -23,6 +23,8 @@ export const initSocket = (server) => {
   //  Subscribe to notification channel
   subscriber.subscribe("notification");
    subscriber.subscribe("cataloguePurchase");
+   subscriber.subscribe("bringYourOwnCloud");
+   subscriber.subscribe("extensionRequest")
 
   subscriber.on("message", (channel, message) => {
     if (channel === "notification") {
@@ -49,6 +51,26 @@ export const initSocket = (server) => {
       } catch (err) {
         console.error("Failed to parse notification:", err);
       }
+    }
+    else if(channel === "extensionRequest"){
+      try {
+        const {orgId,data} = JSON.parse(message);
+         io.to(`org_${orgId}`).emit("extensionRequest", data);
+        io.to(`superadmin_global`).emit("extensionRequest", data);
+        console.log(` Emitted notification to orgId_${orgId}:`);
+      } catch (err) {
+        console.log("Failed to parse request:",err)
+      }
+    }
+    else if( channel === "bringYourOwnCloud"){
+      try {
+         const {orgId,data} = JSON.parse(message);
+         io.to(`org_${orgId}`).emit("bringYourOwnCloud",data);
+          console.log(` Emitted notification to orgId_${orgId}:`);
+      } catch (error) {
+        console.log("Error in sending the cloud data:",error)
+      }
+      
     }
   });
 

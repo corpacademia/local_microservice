@@ -42,7 +42,7 @@ password = sys.argv[3] if len(sys.argv) > 3 else ""
 
 
 # ---------------- OUTPUT CREDENTIALS ----------------
-if os_type == "linux":
+if os_type == "linux" or os_type == "ubuntu":
     username = get_default_username(instance_id)
     password = ""   # Linux has no default password
     port = '22'

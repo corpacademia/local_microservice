@@ -60,7 +60,10 @@ const { createLab,
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
     getAllOrganizationAssignedLabs,
-    updateUserLabCompletedStatus
+    updateUserLabCompletedStatus,
+    getUserPurchasedSingleVMDatacenterLabs,
+    getAllOrgLabs,
+    getDatacenterLabAdminsLab
 } = require('../controllers/labController');
 
 const {
@@ -70,12 +73,14 @@ const {
   deleteCartItemsOnUserId,
   updateCartItem,
   stripeCheckout,
-  instaMojoCheckout,
+  cashfreeCheckout,
   getTransactionDetails,
   exportTransactions,
   userTransactions,
   insertFreeLab,
-  extensionStripeCheckout 
+  extensionCashfreeCheckout,
+  subscriptionCheckout
+  
 } = require('../controllers/labCartController');
 
 const {
@@ -133,6 +138,7 @@ router.post('/getAssessments',getLabBatchAssessment);
 router.get('/getSoftwareDetails',getSoftwareDetails);
 // router.post('/getLabsConfigured',getLabsConfigured);
 router.get('/getPublicCatalogues',getLabCatalogues);
+router.post('getAllOrgLabs',getAllOrgLabs)
 router.post('/updateConfigOfLabs',updateLabsOnConfig);
 router.post('/checkisstarted',checkIsStarted);
 router.post('/createCatalogue',createNewCatalogue);
@@ -143,6 +149,7 @@ router.post('/updateSingleVmStatus',UpdateSingleVmLabStatus);
 router.post('/getCountoflabs/:userId',getCount);
 router.get('/getCloudSliceLabsOfOrg/:orgId',getCloudSliceOrgLabs);
 router.post('/getDatacenterLabOnAdminId', getDatacenterLabOnAdminId);
+router.post('/getDatacenterLabsOfLabadmins',getDatacenterLabAdminsLab)
 router.post('/getDatacenterLabCreds',getDatacenterLabCredentials);
 router.post('/updatesinglevmdatacenter',updateSingleVmDatacenterLab);
 router.post('/singleVMDatacenterLabOrgAssignment', assignSingleVmDatacenterLab)
@@ -153,7 +160,8 @@ router.post('/updateSingleVmDatacenterLabCreds',updateSingleVmDatacenterCredsDis
 router.post('/getOrgAssignedSingleVMDatacenterLab',getOrgAssignedSingleVMDatacenterLab);
 router.post("/getSingleVmDatacenterLabOnId",getDatacenterLabOnLabId);
 router.post("/assignSingleVmDatacenterLabToUser",assignSingleVMDatacenterLabToUsers);
-router.post('/getUserAssignedSingleVmDatacenterLabs/:userId',getUserAssignedSingleVMDatacenterLabs)
+router.post('/getUserAssignedSingleVmDatacenterLabs/:userId',getUserAssignedSingleVMDatacenterLabs);
+router.post('/getUserPurchasedSingleVMDatacenterLabs/:userId',getUserPurchasedSingleVMDatacenterLabs)
 router.post('/getUserAssignedSingleVMDatacenterCredsToUser',getUserAssignedSingleVMDatacenterCredsToUser);
 router.post('/connectToDatacenterVm',connectDatacenterVM);
 router.post('/updateSingleVmDatacenterUserAssignment',updateSingleVMDatacenterUserCredRunningState);
@@ -179,14 +187,14 @@ router.get('/getCartItems/:userId', getCartItemsByUserId);
 router.delete('/removeFromCart/:cartItemId', deleteCartItem);
 router.delete('/clearCart/:userId', deleteCartItemsOnUserId);
 router.put('/updateCartItem/:cartItemId', updateCartItem);
-router.post('/create-checkout-session', stripeCheckout);
+router.post('/create-checkout-session', cashfreeCheckout);
 router.post('/getSingleVMUserPurchsedLabs',getUserPurchasedSinglvmLabs)
 router.post('/getUserPurchasedSinglvmLabsOnLabId',getUserPurchasedSinglvmLabsOnLabId)
 router.get('/notifications/:userId',getNotificationsOfUser);
 router.patch('/notifications/:notificationId/read',markAsRead);
 router.patch('/notifications/:userId/read-all',markAllAsRead);
 router.delete('/notifications/:notificationId',deleteNotifications);
-router.post('/organization/:orgId/transactions', getTransactionDetails);
+router.post('/transactions', getTransactionDetails);
 router.get('/organization/:orgId/export',exportTransactions);
 router.get('/user/:userId/transactions', userTransactions);
 router.post('/setNotificationSettings/:userId',setUserNotificationSettings);
@@ -196,6 +204,7 @@ router.post('/getAllUserPurchasedLabs',getAllUserPurchasedLabs);
 router.get('/getOrgAssignedLabs/:orgId',getAllOrganizationAssignedLabs);
 router.get('/getAllLabs',getAllLabs);
 router.post('/updateUserLabCompletedStatus',updateUserLabCompletedStatus)
-router.post('/extensionStripeCheckout',extensionStripeCheckout)
+router.post('/extensionStripeCheckout',extensionCashfreeCheckout);
+router.post('/subscriptionCheckout',subscriptionCheckout);
 
 module.exports = router;

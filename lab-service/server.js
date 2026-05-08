@@ -5,7 +5,7 @@ const {app} = require('./src/app');
 const bodyParser = require("body-parser");
 const http = require("http");
 const { createToken, debugDump } = require("./src/config/tokenStore");
-const { setupRDPProxy } = require("./src/config/rdpProxy");
+const { setupRDPProxy,setupSSHProxy, setupGuacProxy } = require("./src/config/rdpProxy");
 
 const PORT = parseInt(process.env.PORT || "3002", 10);
 const TOKEN_TTL_MS = parseInt(process.env.TOKEN_TTL_MS || "60000", 10);
@@ -48,7 +48,9 @@ app.get("/api/debug/tokens", (req, res) => {
 const server = http.createServer(app);
 
 // Attach proxy WebSocket server that connects to guacd
-setupRDPProxy(server);
+// setupRDPProxy(server);
+// setupSSHProxy(server);
+setupGuacProxy(server)
 
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
