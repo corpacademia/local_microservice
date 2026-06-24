@@ -2,8 +2,8 @@
 module.exports ={
     CREATE_BATCH :`INSERT INTO batches(name,description,created_by,startdate,enddate) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
     CREATE_BATCH_USER:`INSERT INTO batch_users(batch_id,user_id) VALUES ($1,$2) RETURNING *`,
-    CREATE_BATCH_LAB:`INSERT INTO batchlabs (lab_id,lab_name,start_date,end_date,remaining_days,trainer_id,trainer_name,updated_at,batch_id,assigned_by)
-    VALUES ( $1, $2,$3,$4,EXTRACT(DAY FROM ($4::timestamp  - $3::timestamp)),$5,$6,NOW(),$7,$8)RETURNING *`,
+    CREATE_BATCH_LAB:`INSERT INTO batchlabs (lab_id,lab_name,start_date,end_date,remaining_days,trainer_id,trainer_name,updated_at,batch_id,assigned_by,type)
+    VALUES ( $1, $2,$3,$4,EXTRACT(DAY FROM ($4::timestamp  - $3::timestamp)),$5,$6,NOW(),$7,$8,$9)RETURNING *`,
     INSERT_INTO_USERASSIGNMENT:`INSERT INTO vmclusterdatacenteruserassignment(labid,user_id,assigned_by,startdate,enddate,group_creds_id,assigned_at,assignment_type,batch_id) VALUES($1,$2,$3,$4,$5,$6,NOW(),$7,$8) RETURNING *`,
 
     GET_USER_NOTIFICATION_SETTINGS:`SELECT * FROM user_notification_settings WHERE user_id = $1`,
@@ -13,6 +13,7 @@ module.exports ={
     GET_BATCHES:`SELECT * FROM batches WHERE created_by=ANY($1)`,
     GET_ALL_BATCHES:`SELECT * FROM batches`,
     GET_BATCH:`SELECT * FROM batches WHERE id=$1`,
+    GET_BATCHES_TRAINER:`SELECT * FROM batches WHERE id=ANY($1)`,
     GET_BATCH_USERS:`SELECT 
             bu.*,
             COALESCE(u.name, ou.name) AS name,
@@ -27,6 +28,7 @@ module.exports ={
             `,
     GET_USERSOF_BATCH:`SELECT * FROM batch_users WHERE batch_id=$1`,
     GET_BATCH_LABS:`SELECT * FROM batchlabs where batch_id=$1`,
+    GET_BATCHES_FOR_TRAINER:`SELECT * FROM batchlabs where trainer_id=ANY($1)`,
     GET_ALL_BATCH_LABS:`SELECT * FROM batchlabs`,
     // GET_ALL_LABS_FOR_BATCH: `
     // SELECT lab_id, title, user_id, NULL AS start_date,enddate AS end_date,'singlevm-aws' AS type
@@ -236,125 +238,228 @@ module.exports ={
 // `,
     GET_ALL_LABS_FOR_BATCH: `
 
-    /* ---------- Single VM AWS ---------- */
-    SELECT
-      cl.lab_id,
-      cl.title,
-      cl.user_id,
-      NULL AS start_date,
-      cl.enddate AS end_date,
-      'singlevm-aws' AS type,
-      COALESCE(lb.purchased, false) AS purchased,
-      COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
-    FROM createlab cl
-    LEFT JOIN lab_batch lb
-      ON lb.lab_id = cl.lab_id
-      AND lb.org_id = $2
-    LEFT JOIN lab_batch_purchased lbp
-      ON lbp.lab_id = cl.lab_id
-      AND lbp.org_id = $2
-    WHERE
-      $3 = true
-      OR cl.user_id = $1
-      OR lb.lab_id IS NOT NULL
+/* ---------- Single VM AWS ---------- */
+SELECT
+  cl.lab_id,
+  cl.title,
+  cl.user_id,
 
-    UNION ALL
+  CASE
+    WHEN COALESCE(lb.purchased, false) = true
+    THEN lb.status
+    ELSE cl.status
+  END AS status,
 
-    /* ---------- Cloudslice ---------- */
-    SELECT
-      csl.labid AS lab_id,
-      csl.title,
-      csl.createdby AS user_id,
-      csl.startdate AS start_date,
-      csl.enddate AS end_date,
-      'cloudslice' AS type,
-      COALESCE(csoa.purchased, false) AS purchased,
-      COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
-    FROM cloudslicelab csl
-    LEFT JOIN cloudsliceorgassignment csoa
-      ON csoa.labid = csl.labid
-      AND csoa.orgid = $2
-    LEFT JOIN lab_batch_purchased lbp
-      ON lbp.lab_id = csl.labid
-      AND lbp.org_id = $2
-    WHERE
-      $3 = true
-      OR csl.createdby = $1
-      OR csoa.labid IS NOT NULL
+  NULL AS start_date,
+  cl.enddate AS end_date,
+  'singlevm-aws' AS type,
+  COALESCE(lb.purchased, false) AS purchased,
 
-    UNION ALL
+  CASE
+    WHEN COALESCE(lb.purchased, false) = true
+    THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+    ELSE COALESCE(cl.remaining, 0)
+  END AS quantity
 
-    /* ---------- Single VM Proxmox ---------- */
-    SELECT
-      sp.labid AS lab_id,
-      sp.title,
-      sp.user_id,
-      sp.startdate AS start_date,
-      sp.enddate AS end_date,
-      'singlevm-proxmox' AS type,
-      COALESCE(spoa.purchased, false) AS purchased,
-    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
-    FROM singlevmproxmox_lab sp
-    LEFT JOIN singlevmproxmoxorgassignment spoa
-      ON spoa.labid = sp.labid
-      AND spoa.orgid = $2
-    LEFT JOIN lab_batch_purchased lbp
-      ON lbp.lab_id = sp.labid
-      AND lbp.org_id = $2
-    WHERE
-      $3 = true
-      OR sp.user_id = $1
-      OR spoa.labid IS NOT NULL
+FROM createlab cl
+LEFT JOIN lab_batch lb
+  ON lb.lab_id = cl.lab_id
+  AND lb.org_id = $2
+LEFT JOIN lab_batch_purchased lbp
+  ON lbp.lab_id = cl.lab_id
+  AND lbp.org_id = $2
+WHERE
+  $3 = true
+  OR cl.user_id = ANY($1::uuid[])
+  OR lb.lab_id IS NOT NULL
 
-    UNION ALL
+UNION ALL
 
-    /* ---------- Single VM Datacenter ---------- */
-    SELECT
-      sd.lab_id,
-      sd.title,
-      sd.user_id,
-      sd.startdate AS start_date,
-      sd.enddate AS end_date,
-      'singlevm-datacenter' AS type,
-      COALESCE(sdoa.purchased, false) AS purchased,
-     COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
-    FROM singlevmdatacenter_lab sd
-    LEFT JOIN singlevmdatacenterorgassignment sdoa
-      ON sdoa.labid = sd.lab_id
-      AND sdoa.orgid = $2
-    LEFT JOIN lab_batch_purchased lbp
-      ON lbp.lab_id = sd.lab_id
-      AND lbp.org_id = $2
-    WHERE
-      $3 = true
-      OR sd.user_id = $1
-      OR sdoa.labid IS NOT NULL
+/* ---------- Cloudslice ---------- */
+SELECT
+  csl.labid AS lab_id,
+  csl.title,
+  csl.createdby AS user_id,
 
-    UNION ALL
+  CASE
+    WHEN COALESCE(csoa.purchased, false) = true
+    THEN csoa.status
+    ELSE csl.status
+  END AS status,
 
-    /* ---------- VM Cluster Datacenter ---------- */
-    SELECT
-      vc.labid AS lab_id,
-      vc.title,
-      vc.user_id,
-      vc.startdate AS start_date,
-      vc.enddate AS end_date,
-      'vmcluster-datacenter' AS type,
-      COALESCE(vcoa.purchased, false) AS purchased,
-      COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
-    FROM vmclusterdatacenter_lab vc
-    LEFT JOIN vmclusterdatacenterorgassignment vcoa
-      ON vcoa.labid = vc.labid
-      AND vcoa.orgid = $2
-     LEFT JOIN lab_batch_purchased lbp
-      ON lbp.lab_id = vc.labid
-      AND lbp.org_id = $2
-    WHERE
-      $3 = true
-      OR vc.user_id = $1
-      OR vcoa.labid IS NOT NULL
+  csl.startdate AS start_date,
+  csl.enddate AS end_date,
+  'cloudslice' AS type,
+  COALESCE(csoa.purchased, false) AS purchased,
 
-    `,
+  CASE
+    WHEN COALESCE(csoa.purchased, false) = true
+    THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+    ELSE COALESCE(csl.remaining, 0)
+  END AS quantity
+
+FROM cloudslicelab csl
+LEFT JOIN cloudsliceorgassignment csoa
+  ON csoa.labid = csl.labid
+  AND csoa.orgid = $2
+LEFT JOIN lab_batch_purchased lbp
+  ON lbp.lab_id = csl.labid
+  AND lbp.org_id = $2
+WHERE
+  $3 = true
+  OR csl.createdby = ANY($1::uuid[])
+  OR csoa.labid IS NOT NULL
+
+UNION ALL
+
+/* ---------- Single VM Proxmox ---------- */
+SELECT
+  sp.labid AS lab_id,
+  sp.title,
+  sp.user_id,
+
+  CASE
+    WHEN COALESCE(spoa.purchased, false) = true
+    THEN spoa.status
+    ELSE sp.status
+  END AS status,
+
+  sp.startdate AS start_date,
+  sp.enddate AS end_date,
+  'singlevm-proxmox' AS type,
+  COALESCE(spoa.purchased, false) AS purchased,
+
+  CASE
+    WHEN COALESCE(spoa.purchased, false) = true
+    THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+    ELSE COALESCE(sp.remaining, 0)
+  END AS quantity
+
+FROM singlevmproxmox_lab sp
+LEFT JOIN singlevmproxmoxorgassignment spoa
+  ON spoa.labid = sp.labid
+  AND spoa.orgid = $2
+LEFT JOIN lab_batch_purchased lbp
+  ON lbp.lab_id = sp.labid
+  AND lbp.org_id = $2
+WHERE
+  $3 = true
+  OR sp.user_id = ANY($1::uuid[])
+  OR spoa.labid IS NOT NULL
+
+UNION ALL
+
+/* ---------- Single VM Datacenter ---------- */
+SELECT
+  sd.lab_id,
+  sd.title,
+  sd.user_id,
+
+  CASE
+    WHEN COALESCE(sdoa.purchased, false) = true
+    THEN sdoa.status
+    ELSE sd.status
+  END AS status,
+
+  sd.startdate AS start_date,
+  sd.enddate AS end_date,
+  'singlevm-datacenter' AS type,
+  COALESCE(sdoa.purchased, false) AS purchased,
+
+  CASE
+    WHEN COALESCE(sdoa.purchased, false) = true
+    THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+    ELSE COALESCE(sd.remaining, 0)
+  END AS quantity
+
+FROM singlevmdatacenter_lab sd
+LEFT JOIN singlevmdatacenterorgassignment sdoa
+  ON sdoa.labid = sd.lab_id
+  AND sdoa.orgid = $2
+LEFT JOIN lab_batch_purchased lbp
+  ON lbp.lab_id = sd.lab_id
+  AND lbp.org_id = $2
+WHERE
+  $3 = true
+  OR sd.user_id = ANY($1::uuid[])
+  OR sdoa.labid IS NOT NULL
+
+UNION ALL
+
+/* ---------- VM Cluster Datacenter ---------- */
+SELECT
+  vc.labid AS lab_id,
+  vc.title,
+  vc.user_id,
+
+  CASE
+    WHEN COALESCE(vcoa.purchased, false) = true
+    THEN vcoa.status
+    ELSE vc.status
+  END AS status,
+
+  vc.startdate AS start_date,
+  vc.enddate AS end_date,
+  'vmcluster-datacenter' AS type,
+  COALESCE(vcoa.purchased, false) AS purchased,
+
+  CASE
+    WHEN COALESCE(vcoa.purchased, false) = true
+    THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+    ELSE COALESCE(vc.remaining, 0)
+  END AS quantity
+
+FROM vmclusterdatacenter_lab vc
+LEFT JOIN vmclusterdatacenterorgassignment vcoa
+  ON vcoa.labid = vc.labid
+  AND vcoa.orgid = $2
+LEFT JOIN lab_batch_purchased lbp
+  ON lbp.lab_id = vc.labid
+  AND lbp.org_id = $2
+WHERE
+  $3 = true
+  OR vc.user_id = ANY($1::uuid[])
+  OR vcoa.labid IS NOT NULL
+
+UNION ALL
+
+/* ---------- Proxmox Cluster ---------- */
+SELECT
+  pl.labid AS lab_id,
+  pl.title,
+  pl.user_id,
+
+  CASE
+    WHEN COALESCE(poa.purchased, false) = true
+    THEN poa.status
+    ELSE pl.status
+  END AS status,
+
+  pl.startdate AS start_date,
+  pl.enddate AS end_date,
+  'proxmox-cluster' AS type,
+  COALESCE(poa.purchased, false) AS purchased,
+
+  CASE
+    WHEN COALESCE(poa.purchased, false) = true
+    THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+    ELSE COALESCE(pl.remaining, 0)
+  END AS quantity
+
+FROM proxmoxcluster_lab pl
+LEFT JOIN proxmoxcluster_org_assignment poa
+  ON poa.labid = pl.labid
+  AND poa.orgid = $2
+LEFT JOIN lab_batch_purchased lbp
+  ON lbp.lab_id = pl.labid
+  AND lbp.org_id = $2
+WHERE
+  $3 = true
+  OR pl.user_id = ANY($1::uuid[])
+  OR poa.labid IS NOT NULL
+
+`,
+
     GET_LAB_DETAILS_BATCH: `
 
 /* ---------- Single VM AWS ---------- */
@@ -365,7 +470,12 @@ SELECT
     NULL AS start_date,
     cl.enddate AS end_date,
     'singlevm-aws' AS type,
-    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
+    CASE
+        WHEN lbp.purchased_id IS NOT NULL
+        THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+        ELSE cl.remaining
+    END AS quantity,
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
 FROM createlab cl
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = cl.lab_id
@@ -382,7 +492,12 @@ SELECT
     csl.startdate AS start_date,
     csl.enddate AS end_date,
     'cloudslice' AS type,
-    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
+    CASE
+        WHEN lbp.purchased_id IS NOT NULL
+        THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+        ELSE csl.remaining
+    END AS quantity,
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
 FROM cloudslicelab csl
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = csl.labid
@@ -399,7 +514,12 @@ SELECT
     sp.startdate AS start_date,
     sp.enddate AS end_date,
     'singlevm-proxmox' AS type,
-    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
+    CASE
+        WHEN lbp.purchased_id IS NOT NULL
+        THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+        ELSE sp.remaining
+    END AS quantity,
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
 FROM singlevmproxmox_lab sp
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = sp.labid
@@ -415,7 +535,12 @@ SELECT
     sd.startdate AS start_date,
     sd.enddate AS end_date,
     'singlevm-datacenter' AS type,
-     COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
+    CASE
+        WHEN lbp.purchased_id IS NOT NULL
+        THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+        ELSE sd.remaining
+    END AS quantity,
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
 FROM singlevmdatacenter_lab sd
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = sd.lab_id
@@ -432,13 +557,40 @@ SELECT
     vc.startdate AS start_date,
     vc.enddate AS end_date,
     'vmcluster-datacenter' AS type,
-    COALESCE(lbp.number_of_users - lbp.assigned_users, 0) AS quantity
+    CASE
+        WHEN lbp.purchased_id IS NOT NULL
+        THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+        ELSE vc.remaining
+    END AS quantity,
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
     FROM vmclusterdatacenter_lab vc
     LEFT JOIN lab_batch_purchased lbp
         ON lbp.lab_id = vc.labid
         AND lbp.org_id = $2
     WHERE vc.labid = $1::uuid
-`,
+
+UNION ALL
+
+/* ---------- Proxmox Cluster ---------- */
+SELECT
+    pl.labid::uuid AS lab_id,
+    pl.title::text AS title,
+    pl.user_id,
+    pl.startdate AS start_date,
+    pl.enddate AS end_date,
+    'proxmox-cluster' AS type,
+    CASE
+        WHEN lbp.purchased_id IS NOT NULL
+        THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
+        ELSE pl.remaining
+    END AS quantity,
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
+FROM proxmoxcluster_lab pl
+LEFT JOIN lab_batch_purchased lbp
+    ON lbp.lab_id = pl.labid
+    AND lbp.org_id = $2
+WHERE pl.labid = $1::uuid
+    `,
 
     CHECK_BATCH_USER_ALREADY_EXIST:`SELECT * FROM batch_users WHERE user_id=$1 AND batch_id=$2`,
     CHECK_BATCHLAB_ALREADY:`SELECT * FROM batchlabs WHERE lab_id=$1 and batch_id=$2`,
@@ -599,5 +751,23 @@ SELECT
     DELETE_USER_DATACENTER_LAB:`DELETE FROM vmclusterdatacenteruserassignment WHERE labid=$1 and user_id=$2 and assignment_type=$3 and batch_id=$4`,
     DELETE_SINGLEVM_DATACENTER_FROM_USER:`DELETE FROM singlevmdatacenteruserassignment where labid=$1 and user_id=$2 and assignment_type=$3 and batch_id=$4`, 
     DELETE_LAB_FROM_BATCH:`DELETE FROM batchlabs WHERE lab_id=$1 AND batch_id=$2 RETURNING *`,
-    DELETE_LABS_FROM_BATCH:`DELETE  FROM batchlabs WHERE batch_id=$1 RETURNING *`
+    DELETE_LABS_FROM_BATCH:`DELETE  FROM batchlabs WHERE batch_id=$1 RETURNING *`,
+
+    // Decrement remaining seats in the specific lab table for own labs (not purchased).
+    // $1 = number of users to decrement by, $2 = lab primary key.
+    // WHERE remaining != -1 ensures unlimited labs (remaining = -1) are never changed.
+    DECREMENT_LAB_REMAINING: {
+        'singlevm-aws':
+            `UPDATE createlab SET remaining = GREATEST(remaining - $1, 0) WHERE lab_id = $2 AND remaining != -1`,
+        'cloudslice':
+            `UPDATE cloudslicelab SET remaining = GREATEST(remaining - $1, 0) WHERE labid = $2 AND remaining != -1`,
+        'singlevm-proxmox':
+            `UPDATE singlevmproxmox_lab SET remaining = GREATEST(remaining - $1, 0) WHERE labid = $2 AND remaining != -1`,
+        'singlevm-datacenter':
+            `UPDATE singlevmdatacenter_lab SET remaining = GREATEST(remaining - $1, 0) WHERE lab_id = $2 AND remaining != -1`,
+        'vmcluster-datacenter':
+            `UPDATE vmclusterdatacenter_lab SET remaining = GREATEST(remaining - $1, 0) WHERE labid = $2 AND remaining != -1`,
+        'proxmox-cluster':
+            `UPDATE proxmoxcluster_lab SET remaining = GREATEST(remaining - $1, 0) WHERE labid = $2 AND remaining != -1`
+    }
     }

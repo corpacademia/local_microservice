@@ -17,6 +17,8 @@ module.exports = {
     ORDER BY ler.requested_at DESC`,
     GET_EXTENSION_FOR_ORG:`SELECT * FROM lab_extension_requests WHERE org_id=$1`,
     GET_USER_PURCHASED_SINGLEVM_DATACENTER_LABS:`SELECT * FROM singlevmdatacenter_purchased WHERE labid=$1`,
+    GET_PURCHASED_LAB_QUANTITY:`SELECT *,(number_of_users - assigned_users) AS quantity FROM lab_batch_purchased  WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+   
     CHECK_AVAILABILITY_CREDENTIALS:` SELECT id 
         FROM user_credential_groups 
         WHERE userassigned IS NULL 

@@ -505,6 +505,155 @@ const createTables = async()=>{
       );
       `)
 
+        // ── PROXMOX CLUSTER LAB TABLES ─────────────────────────────────────────
+        // The cluster lab record
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS proxmoxcluster_lab (
+                labid               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                user_id             UUID NOT NULL,
+                title               TEXT NOT NULL,
+                description         TEXT,
+                status              TEXT DEFAULT 'available',
+                startdate           TIMESTAMP,
+                enddate             TIMESTAMP,
+                labguide            TEXT[],
+                userguide           TEXT[],
+                software            TEXT[],
+                credential_id       UUID,
+                cataloguetype       TEXT DEFAULT 'private',
+                remaining           INTEGER DEFAULT -1,
+                learning_objectives TEXT,
+                prerequisites       TEXT,
+                target_audience     TEXT,
+                key_technologies    TEXT[],
+                additional_details  TEXT,
+                guacamole_name      TEXT,
+                guacamole_url       TEXT,
+                created_at          TIMESTAMP DEFAULT NOW()
+            );
+        `);
+        // VM template configs that make up one cluster (admin defines at creation time)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS proxmoxcluster_vm_configs (
+                id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                lab_id        UUID NOT NULL REFERENCES proxmoxcluster_lab(labid) ON DELETE CASCADE,
+                vm_label      TEXT NOT NULL,
+                node          TEXT NOT NULL,
+                template_id   INTEGER NOT NULL,
+                cpu           INTEGER DEFAULT 2,
+                ram           INTEGER DEFAULT 2048,
+                storage       INTEGER DEFAULT 50,
+                storagetype   TEXT DEFAULT 'local-lvm',
+                networkbridge TEXT DEFAULT 'vmbr0',
+                nicmodel      TEXT DEFAULT 'virtio',
+                protocol      TEXT DEFAULT 'RDP',
+                username      TEXT,
+                password      TEXT,
+                created_at    TIMESTAMP DEFAULT NOW()
+            );
+        `);
+
+        // Org-level assignment
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS proxmoxcluster_org_assignment (
+                id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                labid       UUID NOT NULL,
+                orgid       UUID NOT NULL,
+                assigned_by UUID,
+                startdate   TIMESTAMP,
+                enddate     TIMESTAMP,
+                status      TEXT DEFAULT 'available',
+                purchased   BOOLEAN DEFAULT false,
+                purchased_id UUID,
+                assigned_at TIMESTAMP DEFAULT NOW()
+            );
+        `);
+
+        // One row per user per lab assignment
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS proxmoxcluster_user_assignment (
+                id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                labid           UUID NOT NULL,
+                user_id         UUID NOT NULL,
+                assigned_by     UUID,
+                startdate       TIMESTAMP,
+                enddate         TIMESTAMP,
+                status          TEXT DEFAULT 'not-started',
+                isrunning       BOOLEAN DEFAULT false,
+                assignment_type TEXT DEFAULT 'direct',
+                batch_id        UUID,
+                assigned_at     TIMESTAMP DEFAULT NOW()
+            );
+        `);
+
+        // One row per VM per user – filled when templates are cloned on Proxmox
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS proxmoxcluster_user_vms (
+                id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                assignment_id  UUID NOT NULL REFERENCES proxmoxcluster_user_assignment(id) ON DELETE CASCADE,
+                labid          UUID NOT NULL,
+                user_id        UUID NOT NULL,
+                vm_config_id   UUID NOT NULL REFERENCES proxmoxcluster_vm_configs(id),
+                vm_label       TEXT,
+                proxmox_vmid   INTEGER,
+                vmname         TEXT,
+                node           TEXT,
+                protocol       TEXT,
+                username       TEXT,
+                password       TEXT,
+                ip             TEXT,
+                port           TEXT,
+                islaunched     BOOLEAN DEFAULT false,
+                isrunning      BOOLEAN DEFAULT false,
+                isprocessing   BOOLEAN DEFAULT false,
+                created_at     TIMESTAMP DEFAULT NOW()
+            );
+        `);
+        // Add catalogue fields (safe to run on existing tables)
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS cataloguename TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS catalogue_level TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS catalogue_category TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS catalogue_price NUMERIC(10,2)`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS number_hours_day INTEGER DEFAULT 1`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS templates_converted BOOLEAN DEFAULT false`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS learning_objectives TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS prerequisites TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS target_audience TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS key_technologies TEXT[]`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS additional_details TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS guacamole_name TEXT`);
+        await pool.query(`ALTER TABLE proxmoxcluster_lab ADD COLUMN IF NOT EXISTS guacamole_url TEXT`);
+        // ── END PROXMOX CLUSTER LAB TABLES ────────────────────────────────────
+        
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS proxmox_cluster_purchased (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+            labid UUID NOT NULL
+                REFERENCES proxmoxcluster_lab(labid) ON DELETE CASCADE,
+
+            user_id UUID NOT NULL,
+            lab_owner UUID NOT NULL,
+
+            startdate TIMESTAMPTZ DEFAULT NOW(),
+            enddate TIMESTAMPTZ,
+
+            status TEXT DEFAULT 'not-started',
+            isrunning BOOLEAN DEFAULT FALSE,
+
+            purchased_at TIMESTAMPTZ DEFAULT NOW(),
+
+            duration INTEGER,
+            number_hours_day INTEGER,
+
+            purchased BOOLEAN DEFAULT TRUE,
+
+            payment_id UUID,
+
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        ); 
+          `)
+
         console.log(`Successfully created tables`);
 
     } catch (error) {

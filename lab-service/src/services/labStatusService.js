@@ -397,6 +397,18 @@ const deleteBatchDetails = async () => {
     );
   }
 };
+//update purchased expiry of organization
+const updatePurchaseExpiryOfOrg = async()=>{
+  try {
+    
+  } catch (error) {
+     console.error(
+      "Error updating:",
+      error.message
+    );
+  }
+}
+
 
 
 //execute
@@ -409,6 +421,16 @@ cron.schedule('*/1 * * * *', async () => {
     logQuery: labQueries.INSERT_LAB_STATUS_LOGS,
     labType: 'singlevm-aws-lab',
     ownerType: 'lab'
+  });
+});
+//lab batch purchased
+cron.schedule('*/1 * * * *', async () => {
+  await expireLabsAndLog({
+    fetchQuery: labQueries.GET_STATUS_LAB_BATCH_PURCHASED,
+    updateQuery: labQueries.UPDATE_LAB_BATCH_PURCHASED_STATUS,
+    logQuery: labQueries.INSERT_LAB_STATUS_LOGS,
+    labType: 'lab-batch-purchased',
+    ownerType: 'org'
   });
 });
 
@@ -618,6 +640,23 @@ cron.schedule('0 0 * * *', () => {
   console.log('Running cron to update batchlabs remaining days...');
   updateRemainingDaysOfBatchLab();
 });
+
+//update the subscription status
+cron.schedule('* * * * *', async () => {
+  try {
+    console.log('Checking subscription expiry and updating status...');
+
+    const result = await pool.query(
+      labQueries.UPDATE_SUBSCRIPTION_STATUS
+    );
+
+    console.log(`Updated ${result.rowCount} expired subscriptions.`);
+  } catch (error) {
+    console.error('Error updating subscription status:', error);
+  }
+});
+
+
 }
 
 module.exports = {executeCron};

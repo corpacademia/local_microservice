@@ -59,9 +59,9 @@ router.post('/storages',getStorages);
 router.post('/isos',getIsos);
 router.post('/network-bridges',getNetworkBridges);
 router.post('/cpu-models',getCpuModels);
-router.get('/nodes',getClusterResources);
+router.get('/nodes/:id',getClusterResources);
 router.post('/upload-iso',upload.array('iso'),uploadIsoFile);
-router.get('/next-vm-id',getNextVmid);
+router.post('/next-vm-id',getNextVmid);
 router.post('/createSingleVmProxmoxLab',createSingleVmProxmoxConfig);
 router.post('/getProxmoxLabsOnAdminId',getSingleVmProxmoxLab);
 router.post('/checkVMStatus',checkVMStatus);
@@ -88,5 +88,69 @@ router.post('/templates',getTemplatesByNode)
 router.post('/getIpOfVm',getIpOfVm);
 router.post('/deleteVMOFProxmox',deleteVMOFProxmox);
 router.post('/getProxmoxLabAdminsLab',getLabAdminsLab)
+
+// ── Proxmox Cluster Lab routes ────────────────────────────────────────────────
+const {
+    createProxmoxClusterLab,
+    getProxmoxClusterLabs,
+    getProxmoxClusterLabOnId,
+    getProxmoxClusterLabDetails,
+    updateProxmoxClusterLab,
+    deleteProxmoxClusterLab,
+    assignProxmoxClusterToOrg,
+    getOrgProxmoxClusterLabs,
+    assignProxmoxClusterToUser,
+    getUserProxmoxClusterLabs,
+    launchProxmoxClusterVMs,
+    stopProxmoxClusterVMs,
+    getProxmoxClusterVMStatus,
+    deleteProxmoxClusterUserAssignment,
+    convertProxmoxClusterToCatalogue,
+    updateProxmoxClusterCatalogueDetails,
+    convertProxmoxClusterVMsToTemplates,
+    launchProxmoxClusterConfigVMs,
+    stopProxmoxClusterConfigVMs,
+    getProxmoxClusterConfigVMStatus,
+    startSingleProxmoxClusterVM,
+    stopSingleProxmoxClusterVM,
+    startSingleProxmoxClusterConfigVM,
+    stopSingleProxmoxClusterConfigVM,
+    startAndConnectProxmoxClusterVM,
+    deleteProxmoxClusterFromOrganization,
+    selfAssignProxmoxCluster,
+    getProxmoxClusterLabAdminsLab,
+    getOrgVMConfigs
+} = require('../services/proxmoxClusterService');
+
+router.post('/createProxmoxClusterLab',              createProxmoxClusterLab);
+router.post('/getProxmoxClusterLabs',                getProxmoxClusterLabs);
+router.post('/getProxmoxClusterLabOnId',             getProxmoxClusterLabOnId);
+router.post('/getProxmoxClusterLabDetails',          getProxmoxClusterLabDetails);
+router.post('/updateProxmoxClusterLab',              updateProxmoxClusterLab);
+router.delete('/deleteProxmoxClusterLab/:labId',     deleteProxmoxClusterLab);
+router.post('/assignProxmoxClusterToOrg',            assignProxmoxClusterToOrg);
+router.post('/getOrgProxmoxClusterLabs',             getOrgProxmoxClusterLabs);
+router.post('/assignProxmoxClusterToUser',           assignProxmoxClusterToUser);
+router.post('/getUserProxmoxClusterLabs',            getUserProxmoxClusterLabs);
+router.post('/launchProxmoxClusterVMs',              launchProxmoxClusterVMs);
+router.post('/stopProxmoxClusterVMs',                stopProxmoxClusterVMs);
+router.post('/getProxmoxClusterVMStatus',            getProxmoxClusterVMStatus);
+router.post('/deleteProxmoxClusterUserAssignment',   deleteProxmoxClusterUserAssignment);
+router.post('/convertProxmoxClusterToCatalogue',         convertProxmoxClusterToCatalogue);
+router.post('/updateProxmoxClusterCatalogueDetails',     updateProxmoxClusterCatalogueDetails);
+router.post('/convertProxmoxClusterVMsToTemplates',      convertProxmoxClusterVMsToTemplates);
+router.post('/launchProxmoxClusterConfigVMs',            launchProxmoxClusterConfigVMs);
+router.post('/stopProxmoxClusterConfigVMs',              stopProxmoxClusterConfigVMs);
+router.post('/getProxmoxClusterConfigVMStatus',          getProxmoxClusterConfigVMStatus);
+router.post('/startSingleProxmoxClusterVM',              startSingleProxmoxClusterVM);
+router.post('/stopSingleProxmoxClusterVM',               stopSingleProxmoxClusterVM);
+router.post('/startSingleProxmoxClusterConfigVM',        startSingleProxmoxClusterConfigVM);
+router.post('/stopSingleProxmoxClusterConfigVM',         stopSingleProxmoxClusterConfigVM);
+router.post('/startAndConnectProxmoxClusterVM',          startAndConnectProxmoxClusterVM);
+router.post('/deleteProxmoxClusterFromOrganization',     deleteProxmoxClusterFromOrganization);
+router.post('/selfAssignProxmoxCluster',                 selfAssignProxmoxCluster);
+router.post('/getProxmoxClusterLabAdminsLab',getProxmoxClusterLabAdminsLab);
+router.post('/getOrgVMConfigs',getOrgVMConfigs)
+// ── End Proxmox Cluster Lab routes ────────────────────────────────────────────
 
 module.exports = router;

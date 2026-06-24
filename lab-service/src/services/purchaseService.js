@@ -8,6 +8,7 @@ const { GET_ALL_PLANS, GET_PLAN } = require('./subscriptionQueries');
 const { sendNotificationToMail } = require('./notificationServices');
 const path = require('path');
 const { getUserData } = require('./emailNotificationService');
+const promoxQueries = require('./promoxQueries');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const getOrgCataloguePurchased = async(req,res)=>{
@@ -363,6 +364,54 @@ const checkLabAvailability = async(req,res)=>{
     }
    
 }
+//check the quantity remaining from lab batch purchased
+const checkQuantityOfPurchased = async(req,res)=>{
+    try {
+        const {labId,orgId} = req.body;
+        if(!labId || !orgId){
+            return res.status(400).send({
+                success:false,
+                message:"Please provide the required fields"
+            })
+    }
+    const getQty = await pool.query(purchaseQueries.GET_PURCHASED_LAB_QUANTITY,[labId,orgId]);
+    
+    if(!getQty.rows.length){
+        // No purchase record → own lab → query remaining directly from the lab tables
+        const getOwnLabRemaining = await pool.query(`
+            SELECT COALESCE(
+                (SELECT remaining FROM createlab WHERE lab_id = $1),
+                (SELECT remaining FROM cloudslicelab WHERE labid = $1),
+                (SELECT remaining FROM singlevmproxmox_lab WHERE labid = $1),
+                (SELECT remaining FROM singlevmdatacenter_lab WHERE lab_id = $1),
+                (SELECT remaining FROM vmclusterdatacenter_lab WHERE labid = $1),
+                (SELECT remaining FROM proxmoxcluster_lab WHERE labid = $1),
+                -1
+            ) AS remaining
+        `, [labId]);
+        const remaining = getOwnLabRemaining.rows[0]?.remaining ?? -1;
+        return res.status(200).send({
+            success:true,
+            data:{ quantity: remaining },
+            message:"Successfully accessed the data"
+        })
+    }
+    return res.status(200).send({
+        success:true,
+        data:getQty.rows[0],
+        message:"Successfully accessed the data"
+    })
+    } catch (error) {
+       console.log("Error:",error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        }) 
+    }
+    
+}
+
 
 //get the single vm datacenter user purchased labs
 const getUserPurchasedSingleVmDatacenterLabs = async(req,res)=>{
@@ -406,4 +455,5 @@ module.exports = {
     checkLabAvailability,
     getUserPurchasedSingleVmDatacenterLabs,
     subscriptionPurchase,
+    checkQuantityOfPurchased
 }

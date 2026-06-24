@@ -1,67 +1,266 @@
 const pool = require('../db/dbConfig');
 const queries = require('./cloudCredentialsQueries');
+const axios = require("axios");
+const https = require("https");
 
-const addOrgCloudCredentials = async(req,res)=>{
-    try {
-        const {provider,name,credentials,org_id,createdBy} = req.body;
-        if(!provider || !name ||!credentials ||!org_id ||!createdBy){
-            return res.status(400).send({
-                success:false,
-                message:"Please provide all required fields"
-            })
-        }
-        const addCredentials  = await pool.query(queries.INSERT_ORG_CLOUD_CREDENTIALS,[org_id,provider,name,credentials,createdBy]);
-        if(!addCredentials.rows.length){
-            return res.status(404).send({
-                success:false,
-                message:"Could not insert the credentials"
-            })
-        }
-        return res.status(200).send({
-            success:true,
-            message:"Successfully added credentials",
-            data:addCredentials.rows[0]
-        })
-    } catch (error) {
-        console.log("error:",error);
-        return res.status(500).send({
-            success:true,
-            message:"Internal server error",
-            error:error.message
-        })
-    }
-}
+const getProxmoxFingerprint = async (
+  api_url,
+  token,
+  secret_key
+) => {
+  try {
+    const httpsAgent = new https.Agent({
+      rejectUnauthorized: false
+    });
 
-const addGlobalCloudCredentails = async(req,res)=>{
-    try {
-        const {provider,name,credentials,createdBy} = req.body;
-        if(!provider || !name ||!credentials ||!createdBy){
-            return res.status(400).send({
-                success:false,
-                message:"Please provide all required fields"
-            })
+    const response = await axios.get(
+      `${api_url}/nodes`,
+      {
+        httpsAgent,
+        headers: {
+          Authorization:
+            `PVEAPIToken=${token}=${secret_key}`
         }
-        const addCredentials  = await pool.query(queries.INSERT_GLOBAL_CLOUD_CREDENTIALS,[createdBy,provider,name,credentials,createdBy]);
-        if(!addCredentials.rows.length){
-            return res.status(404).send({
-                success:false,
-                message:"Could not insert the credentials"
-            })
-        }
-        return res.status(200).send({
-            success:true,
-            message:"Successfully added credentials",
-            data:addCredentials.rows[0]
-        })
-    } catch (error) {
-         console.log("error:",error);
-        return res.status(500).send({
-            success:true,
-            message:"Internal server error",
-            error:error.message
-        })
+      }
+    );
+
+    const cert =
+      response.request.socket.getPeerCertificate();
+
+    return cert?.fingerprint256 || null;
+
+  } catch (error) {
+    console.log(
+      "Fingerprint fetch error:",
+      error.message
+    );
+    return null;
+  }
+};
+
+// const addOrgCloudCredentials = async(req,res)=>{
+//     try {
+//         const {provider,name,credentials,org_id,createdBy} = req.body;
+//         if(!provider || !name ||!credentials ||!org_id ||!createdBy){
+//             return res.status(400).send({
+//                 success:false,
+//                 message:"Please provide all required fields"
+//             })
+//         }
+//         const addCredentials  = await pool.query(queries.INSERT_ORG_CLOUD_CREDENTIALS,[org_id,provider,name,credentials,createdBy]);
+//         if(!addCredentials.rows.length){
+//             return res.status(404).send({
+//                 success:false,
+//                 message:"Could not insert the credentials"
+//             })
+//         }
+//         return res.status(200).send({
+//             success:true,
+//             message:"Successfully added credentials",
+//             data:addCredentials.rows[0]
+//         })
+//     } catch (error) {
+//         console.log("error:",error);
+//         return res.status(500).send({
+//             success:true,
+//             message:"Internal server error",
+//             error:error.message
+//         })
+//     }
+// }
+
+// const addGlobalCloudCredentails = async(req,res)=>{
+//     try {
+//         const {provider,name,credentials,createdBy} = req.body;
+//         if(!provider || !name ||!credentials ||!createdBy){
+//             return res.status(400).send({
+//                 success:false,
+//                 message:"Please provide all required fields"
+//             })
+//         }
+//         const addCredentials  = await pool.query(queries.INSERT_GLOBAL_CLOUD_CREDENTIALS,[createdBy,provider,name,credentials,createdBy]);
+//         if(!addCredentials.rows.length){
+//             return res.status(404).send({
+//                 success:false,
+//                 message:"Could not insert the credentials"
+//             })
+//         }
+//         return res.status(200).send({
+//             success:true,
+//             message:"Successfully added credentials",
+//             data:addCredentials.rows[0]
+//         })
+//     } catch (error) {
+//          console.log("error:",error);
+//         return res.status(500).send({
+//             success:true,
+//             message:"Internal server error",
+//             error:error.message
+//         })
+//     }
+// }
+
+const addOrgCloudCredentials = async (req, res) => {
+  try {
+    const {
+      provider,
+      name,
+      credentials,
+      org_id,
+      createdBy
+    } = req.body;
+
+    if (
+      !provider ||
+      !name ||
+      !credentials ||
+      !org_id ||
+      !createdBy
+    ) {
+      return res.status(400).send({
+        success: false,
+        message: "Please provide all required fields"
+      });
     }
-}
+
+    let updatedCredentials = credentials;
+
+    // Only for Proxmox
+    if (
+      provider?.toLowerCase() === "proxmox"
+    ) {
+      const fingerprint =
+        await getProxmoxFingerprint(
+          credentials.api_url,
+          credentials.token,
+          credentials.secret_key
+        );
+
+      updatedCredentials = {
+        ...credentials,
+        fingerprint
+      };
+    }
+
+    const addCredentials =
+      await pool.query(
+        queries.INSERT_ORG_CLOUD_CREDENTIALS,
+        [
+          org_id,
+          provider,
+          name,
+          updatedCredentials,
+          createdBy
+        ]
+      );
+
+    if (!addCredentials.rows.length) {
+      return res.status(404).send({
+        success: false,
+        message:
+          "Could not insert the credentials"
+      });
+    }
+
+    return res.status(200).send({
+      success: true,
+      message:
+        "Successfully added credentials",
+      data: addCredentials.rows[0]
+    });
+
+  } catch (error) {
+    console.log("error:", error);
+
+    return res.status(500).send({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
+const addGlobalCloudCredentails = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      provider,
+      name,
+      credentials,
+      createdBy
+    } = req.body;
+
+    if (
+      !provider ||
+      !name ||
+      !credentials ||
+      !createdBy
+    ) {
+      return res.status(400).send({
+        success: false,
+        message:
+          "Please provide all required fields"
+      });
+    }
+
+    let updatedCredentials = credentials;
+
+    // Only for Proxmox
+    if (
+      provider?.toLowerCase() === "proxmox"
+    ) {
+      const fingerprint =
+        await getProxmoxFingerprint(
+          credentials.api_url,
+          credentials.token,
+          credentials.secret_key
+        );
+
+      updatedCredentials = {
+        ...credentials,
+        fingerprint
+      };
+    }
+
+    const addCredentials =
+      await pool.query(
+        queries.INSERT_GLOBAL_CLOUD_CREDENTIALS,
+        [
+          createdBy,
+          provider,
+          name,
+          updatedCredentials,
+          createdBy
+        ]
+      );
+
+    if (!addCredentials.rows.length) {
+      return res.status(404).send({
+        success: false,
+        message:
+          "Could not insert the credentials"
+      });
+    }
+
+    return res.status(200).send({
+      success: true,
+      message:
+        "Successfully added credentials",
+      data: addCredentials.rows[0]
+    });
+
+  } catch (error) {
+    console.log("error:", error);
+
+    return res.status(500).send({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
 
 const editOrgCloudCredentials = async(req,res)=>{
     try {

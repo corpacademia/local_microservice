@@ -66,7 +66,8 @@ const {
   getUserPurchasedLabs,
   updateDates,
   getCloudSliceDetailsForCatalogue,
-  getUserPurchasedLabOnId
+  getUserPurchasedLabOnId,
+  getCloudSliceLab
 } = require('../controllers/cloudSliceAwsController')
 
 router.get('/getAwsServices',getAllAwsServices);
@@ -79,6 +80,7 @@ router.get('/getCloudSlices',getCloudSliceLabByCreatedUserId);
 router.post('/getAllCloudSliceLabs',getAllCloudSliceLabs)
 router.post('/getCloudSliceDetails/:labId',getCloudSliceLabById);
 router.post('/updateCloudSliceServices/:labId',updateServicesOnLabId);
+router.post('/getCloudSliceLab',getCloudSliceLab)
 
 router.get('/getModules/:sliceId', getAllModules);
 router.get('/lab-exercises/:moduleId', getLabExercises);

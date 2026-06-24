@@ -118,6 +118,38 @@ const createCloudSliceLabWithModules = async(req,res)=>{
         }
     }
 
+     const getCloudSliceLab = async(req,res)=>{
+        try {
+            const {userIds} = req.body;
+            console.log(userIds.length === 0)
+            if(userIds.length === 0){
+                return res.status(400).send({
+                    success:false,
+                    message:"Please provide user id"
+                })
+            }
+            const result = await cloudSliceAwsService.getCloudSliceLabsByCreatedUser(userIds);
+            if(!result.length){
+                return res.status(200).send({
+                    success:true,
+                    message:"No cloud slice labs found",
+                    data:[]
+                })
+            }
+            return res.status(200).send({
+                success:true,
+                message:"Successfully fetched all cloud slice labs",
+                data:result
+            })
+        } catch (error) {
+            console.log(error);
+            return res.status(500).send({
+                success:false,
+                message:"Internal server error",
+                error:error.message
+            })
+        }
+    }
 // get cloud slice lab by id
 const getCloudSliceLabById = async(req,res)=>{
     try {
@@ -1146,8 +1178,7 @@ const getUserAssignedLabStatus = async(req,res)=>{
 //delete user assigned labs on user id and labid
 const deleteUserAssignedCloudSliceLabs = async(req,res)=>{
     try {
-        const {userId,labId,purchased} = req.body;
-        console.log(req.body)
+        const {userId,labId,purchased,orgId} = req.body;
         if(!userId){
             return res.status(400).send({
                 success:false,
@@ -1160,7 +1191,7 @@ const deleteUserAssignedCloudSliceLabs = async(req,res)=>{
                 message:"Please provide lab id"
             })
         }
-        const result = await cloudSliceAwsService.deleteCloudSliceLabForUser(labId,userId,purchased);
+        const result = await cloudSliceAwsService.deleteCloudSliceLabForUser(labId,userId,purchased,orgId);
         if(!result){
             return res.status(404).send({
                 success:false,
@@ -1186,6 +1217,7 @@ const deleteUserAssignedCloudSliceLabs = async(req,res)=>{
 const updateQuizExerciseStatusOfUser = async(req,res)=>{
     try {
         const exerciseId = req.params.exerciseId;
+        const {data,moduleId,userId} = req.body;
         if(!exerciseId || !data || !moduleId || !userId){
             return res.status(400).send({
                 success:false,
@@ -1548,5 +1580,6 @@ module.exports = {
     getUserPurchasedLabs,
     updateDates,
     getCloudSliceDetailsForCatalogue,
-    getUserPurchasedLabOnId
+    getUserPurchasedLabOnId,
+    getCloudSliceLab
 }

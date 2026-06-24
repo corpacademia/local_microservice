@@ -60,6 +60,10 @@ module.exports = {
     GET_DATACENTER_LAB_CREDS_TOUSER:`SELECT * FROM datacenter_lab_user_credentials WHERE labid=$1 AND assigned_to=$2`,
     GET_DATACENTER_LAB_CREDS_ONLABID:`SELECT * FROM datacenter_lab_user_credentials WHERE labid=$1 AND orgassigned is NULL AND admin_id is NULL`,
 
+    UPDATE_SUBSCRIPTION_STATUS:`UPDATE license_keys
+    SET status = 'expired'
+    WHERE NOW() > expires_at
+    AND status <> 'expired';`  ,
     UPDATE_USER_VMCLUSTER_DATACENTER_USER_STATUS:`UPDATE vmclusterdatacenteruserassignment set status=$1 where labid=$2 and user_id=$3 RETURNING *`,
     UPDATE_SINGLEVM_AWS_CONTENT:`UPDATE createlab SET title=$1,description=$2,cpu=$3,ram=$4,os=$5,provider=$6,instance=$7,software=$8,labguide=$9,userguide=$10,enddate=$11 WHERE lab_id=$12 RETURNING *`,
     UPDATE_SINGLEVM_DATACENTER:`UPDATE singlevmdatacenter_lab SET  software=$1, cataloguetype=$2,cataloguename=$4,level=$5,category=$6,price=$7,number_hours_day=$8 where lab_id=$3 RETURNING *`,
@@ -317,6 +321,39 @@ module.exports = {
         WHERE c.cataloguetype = 'public'
         GROUP BY c.labid, c.cataloguename, c.description, c.level, c.category,
                 c.startdate, c.enddate, c.createdby, c.price,
+                u.organization, ou.organization
+
+        UNION ALL
+
+        -- proxmoxcluster_lab
+        SELECT
+            pl.labid AS id,
+            pl.cataloguename AS title,
+            pl.description,
+            pl.catalogue_level AS level,
+            pl.catalogue_category AS category,
+            COALESCE(DATE_PART('day', pl.enddate - pl.startdate), 30) AS duration,
+            COALESCE(pl.number_hours_day, 1)::INTEGER AS number_hours_day,
+            pl.user_id,
+            COALESCE(pl.catalogue_price::TEXT, '0') AS price,
+            0::INTEGER AS total_enrollments,
+            pl.created_at,
+            'proxmox-cluster' AS type,
+            'available' AS software,
+            CASE
+              WHEN COALESCE(pl.catalogue_price, 0) <= 0 THEN true
+              ELSE false
+            END AS isFree,
+            COALESCE(u.organization, ou.organization) AS provider,
+            CAST(0 AS NUMERIC) AS avg_rating
+        FROM proxmoxcluster_lab pl
+        LEFT JOIN users u ON pl.user_id = u.id
+        LEFT JOIN organization_users ou ON pl.user_id = ou.id
+        WHERE pl.cataloguetype = 'public'
+          AND pl.cataloguename IS NOT NULL
+        GROUP BY pl.labid, pl.cataloguename, pl.description, pl.catalogue_level,
+                pl.catalogue_category, pl.startdate, pl.enddate, pl.user_id,
+                pl.catalogue_price, pl.number_hours_day, pl.created_at,
                 u.organization, ou.organization;
     `,
 
@@ -480,7 +517,39 @@ module.exports = {
       AND COALESCE(u.org_id, ou.org_id) = $1
     GROUP BY c.labid, c.cataloguename, c.description, c.level, c.category,
             c.startdate, c.enddate, c.createdby, c.price,
-            u.organization, ou.organization, u.org_id, ou.org_id;
+            u.organization, ou.organization, u.org_id, ou.org_id
+
+    UNION ALL
+
+    -- proxmoxcluster_lab (show ALL public proxmox-cluster labs to any org user)
+    SELECT
+        pl.labid AS id,
+        pl.cataloguename AS title,
+        pl.description,
+        pl.catalogue_level AS level,
+        pl.catalogue_category AS category,
+        COALESCE(DATE_PART('day', pl.enddate - pl.startdate), 30) AS duration,
+        COALESCE(pl.number_hours_day, 1)::INTEGER AS number_hours_day,
+        pl.user_id,
+        COALESCE(pl.catalogue_price::TEXT, '0') AS price,
+        0::INTEGER AS total_enrollments,
+        'proxmox-cluster' AS type,
+        'available' AS software,
+        CASE
+          WHEN COALESCE(pl.catalogue_price, 0) <= 0 THEN true
+          ELSE false
+        END AS isFree,
+        COALESCE(u.organization, ou.organization) AS provider,
+        CAST(0 AS NUMERIC) AS avg_rating
+    FROM proxmoxcluster_lab pl
+    LEFT JOIN users u ON pl.user_id = u.id
+    LEFT JOIN organization_users ou ON pl.user_id = ou.id
+    WHERE pl.cataloguetype = 'public'
+      AND pl.cataloguename IS NOT NULL
+    GROUP BY pl.labid, pl.cataloguename, pl.description, pl.catalogue_level,
+            pl.catalogue_category, pl.startdate, pl.enddate, pl.user_id,
+            pl.catalogue_price, pl.number_hours_day, pl.created_at,
+            u.organization, ou.organization;
     `,
 
     GET_ALL_LABS_BY_ORG: `
@@ -1078,6 +1147,7 @@ GET_STATUS_OF_SINGLEVM_ORGLAB:`SELECT lab_id, status FROM lab_batch
       WHERE enddate < NOW() AND status != 'expired'`,
 GET_STATUS_OF_SINGLEVM_USERLAB:`SELECT lab_id, status FROM labassignments
       WHERE completion_date < NOW() AND status != 'expired'`,
+GET_STATUS_LAB_BATCH_PURCHASED:`SELECT * FROM lab_batch_purchased where expiry_date < NOw() And status != 'expired'`,
 
 //single vm datacenter status update
 GET_STATUS_SINGLEVM_DATACENTER_LAB:`SELECT lab_id, status FROM singlevmdatacenter_lab
@@ -1151,6 +1221,7 @@ FROM cloudsliceusermodulestatus WHERE labid = $1 AND user_id = $2
 
 //lab status auto update based on enddate
 UPDATE_SINGLEvM_AWS_LAB_STATUS:`UPDATE createlab set status = 'expired' where enddate<NOW() and status!='expired'`,
+UPDATE_LAB_BATCH_PURCHASED_STATUS:`UPDATE lab_batch_purchased set status = 'expired' where expiry_date<NOW() and status!='expired'`,
 UPDATE_SINGLEvM_AWS_ORG_STATUS:`UPDATE lab_batch set status = 'expired' where enddate<NOW() and status!='expired'`,
 UPDATE_SINGLEvM_AWS_USER_STATUS:`UPDATE labassignments set status = 'expired' where completion_date<NOW() and status!='expired'`,
 UPDATE_SINGLEVM_DATACENTER_LAB_STATUS:`UPDATE singlevmdatacenter_lab set status = 'expired' where enddate<NOW() and status!='expired'`,

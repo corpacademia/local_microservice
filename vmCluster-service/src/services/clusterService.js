@@ -485,6 +485,29 @@ const assignLabToUser = async (labId, userIds, assignedBy, startDate, endDate, o
 
     await client.query('COMMIT');
     client.release();
+
+    try {
+      const assignedCount = Array.isArray(userIds) ? userIds.length : 1;
+      const purchaseCheck = await pool.query(
+        `SELECT purchased_id FROM lab_batch_purchased WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+        [labId, orgId]
+      );
+      if (purchaseCheck.rows.length > 0) {
+        await pool.query(
+          `UPDATE lab_batch_purchased SET assigned_users = GREATEST(COALESCE(assigned_users,0)+$1,0) WHERE lab_id=$2 AND org_id=$3`,
+          [assignedCount, labId, orgId]
+        );
+      } else {
+        await pool.query(`UPDATE createlab SET remaining = GREATEST(remaining - $1, 0) WHERE lab_id = $2 AND remaining != -1`, [assignedCount, labId]);
+        await pool.query(`UPDATE cloudslicelab SET remaining = GREATEST(remaining - $1, 0) WHERE labid = $2 AND remaining != -1`, [assignedCount, labId]);
+        await pool.query(`UPDATE singlevmproxmox_lab SET remaining = GREATEST(remaining - $1, 0) WHERE labid = $2 AND remaining != -1`, [assignedCount, labId]);
+        await pool.query(`UPDATE singlevmdatacenter_lab SET remaining = GREATEST(remaining - $1, 0) WHERE lab_id = $2 AND remaining != -1`, [assignedCount, labId]);
+        await pool.query(`UPDATE vmclusterdatacenter_lab SET remaining = GREATEST(remaining - $1, 0) WHERE labid = $2 AND remaining != -1`, [assignedCount, labId]);
+      }
+    } catch (qtyError) {
+      console.log('Error updating lab quantity after assignment:', qtyError.message);
+    }
+
     return true;
 
   } catch (error) {

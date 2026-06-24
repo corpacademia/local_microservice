@@ -79,7 +79,8 @@ const {
   userTransactions,
   insertFreeLab,
   extensionCashfreeCheckout,
-  subscriptionCheckout
+  subscriptionCheckout,
+  templateCheckout
   
 } = require('../controllers/labCartController');
 
@@ -206,5 +207,6 @@ router.get('/getAllLabs',getAllLabs);
 router.post('/updateUserLabCompletedStatus',updateUserLabCompletedStatus)
 router.post('/extensionStripeCheckout',extensionCashfreeCheckout);
 router.post('/subscriptionCheckout',subscriptionCheckout);
+router.post('/templateCheckout',templateCheckout)
 
 module.exports = router;

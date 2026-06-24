@@ -598,8 +598,28 @@ const assignSingleVmDatacenterLabToUser = async(data,sessionToken)=>{
       
       
             insertedRows.push(assign.rows[0]);
+            try {
+                const purchaseCheck = await pool.query(
+                    `SELECT purchased_id FROM lab_batch_purchased WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+                    [labId, orgId]
+                );
+                if (purchaseCheck.rows.length > 0) {
+                    await pool.query(
+                        `UPDATE lab_batch_purchased SET assigned_users = GREATEST(COALESCE(assigned_users,0)+1,0) WHERE lab_id=$1 AND org_id=$2`,
+                        [labId, orgId]
+                    );
+                } else {
+                    await pool.query(`UPDATE createlab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [labId]);
+                    await pool.query(`UPDATE cloudslicelab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [labId]);
+                    await pool.query(`UPDATE singlevmproxmox_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [labId]);
+                    await pool.query(`UPDATE singlevmdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [labId]);
+                    await pool.query(`UPDATE vmclusterdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [labId]);
+                }
+            } catch (qtyError) {
+                console.log('Error updating lab quantity after assignment:', qtyError.message);
+            }
           }
-      
+
           return insertedRows;
 
     } catch (error) {
@@ -607,7 +627,7 @@ const assignSingleVmDatacenterLabToUser = async(data,sessionToken)=>{
         // throw new Error("Error in assigning the lab to user");
         throw error;
     }
-    
+
 }
 
 //get all the single vm datacenter labs 
@@ -772,6 +792,26 @@ const assignLab = async (lab, userIds, assign_admin_id,startDate,endDate,session
             ]);
             if (result.rows.length > 0) {
                 successfulAssignments.push(result.rows[0]);
+                try {
+                    const purchaseCheck = await pool.query(
+                        `SELECT purchased_id FROM lab_batch_purchased WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+                        [lab, userData?.org_id]
+                    );
+                    if (purchaseCheck.rows.length > 0) {
+                        await pool.query(
+                            `UPDATE lab_batch_purchased SET assigned_users = GREATEST(COALESCE(assigned_users,0)+1,0) WHERE lab_id=$1 AND org_id=$2`,
+                            [lab, userData?.org_id]
+                        );
+                    } else {
+                        await pool.query(`UPDATE createlab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [lab]);
+                        await pool.query(`UPDATE cloudslicelab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+                        await pool.query(`UPDATE singlevmproxmox_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+                        await pool.query(`UPDATE singlevmdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [lab]);
+                        await pool.query(`UPDATE vmclusterdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+                    }
+                } catch (qtyError) {
+                    console.log('Error updating lab quantity after assignment:', qtyError.message);
+                }
                 await pool.query('BEGIN');
                     const insertNotification = await pool.query(labQueries.INSERT_NOTIFICATION, ['lab_assigned', 'Lab Assigned', `A new lab has been assigned to you. Lab ID: ${lab}`,'medium', user,[JSON.stringify({
                 labId: lab,

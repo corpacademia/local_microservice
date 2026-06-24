@@ -96,7 +96,7 @@ const createCloudSliceLabWithModules = async (labData,filesArray) => {
                 throw new Error('Please provide all required fields in modules');
             }
         
-            let totalDuration = 0; // 👈 Initialize total duration
+            let totalDuration = 0; //  Initialize total duration
         
             // Pre-calculate exercise durations
             for (const exercise of module.exercises) {
@@ -934,10 +934,30 @@ const cloudSliceLabUserAssignment = async (data,sessionToken) => {
         }
   
         insertedRows.push(result.rows[0]);
+        try {
+          const purchaseCheck = await pool.query(
+            `SELECT purchased_id FROM lab_batch_purchased WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+            [lab, userData?.org_id]
+          );
+          if (purchaseCheck.rows.length > 0) {
+            await pool.query(
+              `UPDATE lab_batch_purchased SET assigned_users = GREATEST(COALESCE(assigned_users,0)+1,0) WHERE lab_id=$1 AND org_id=$2`,
+              [lab, userData?.org_id]
+            );
+          } else {
+            await pool.query(`UPDATE createlab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [lab]);
+            await pool.query(`UPDATE cloudslicelab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+            await pool.query(`UPDATE singlevmproxmox_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+            await pool.query(`UPDATE singlevmdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [lab]);
+            await pool.query(`UPDATE vmclusterdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+          }
+        } catch (qtyError) {
+          console.log('Error updating lab quantity after assignment:', qtyError.message);
+        }
       }
-  
+
       return insertedRows;
-  
+
     } catch (error) {
       console.log(error);
     //   throw new Error('Error in cloudSliceLabUserAssignment function');
@@ -1025,7 +1045,7 @@ const getUserAssignedLabStatus = async(userId)=>{
 }
 
 //DELETE CLOUDSLICE LAB FOR USER WIHT USERID AND LABID
-const deleteCloudSliceLabForUser = async(labId,userId,purchased)=>{
+const deleteCloudSliceLabForUser = async(labId,userId,purchased,orgId)=>{
     try {
         if(!labId || !userId) {
             throw new Error('Please provide all required fields in lab assignment');
@@ -1036,6 +1056,8 @@ const deleteCloudSliceLabForUser = async(labId,userId,purchased)=>{
         }
         else{
              result = await pool.query(cloudSliceAwsQueries.DELETE_CLOUD_SLICE_USER_ASSIGNMENT_ON_LABID_USERID,[labId,userId]);
+             await pool.query(cloudSliceAwsQueries.UPDATE_REMAINING_SEATS,[-1,labId,orgId]);
+             
         }
         
         if (!result.rows.length) {

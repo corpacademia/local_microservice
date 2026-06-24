@@ -215,7 +215,7 @@ const getDatacenterLabOnAdminId = async (req, res) => {
     }
 }
 
-const getDatacenterLabAdminsLab = async()=>{
+const getDatacenterLabAdminsLab = async(req,res)=>{
       try {
         const { adminIds } = req.body;
         const result = await labService.getDatacenterLabAdminsLab(adminIds);

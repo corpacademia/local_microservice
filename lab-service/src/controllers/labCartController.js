@@ -24,6 +24,7 @@ const { createTheExtensionRequest, subscriptionPurchase } = require('../services
 const labCartQueries = require('../services/labCartQueries');
 const { assign } = require('nodemailer/lib/shared');
 const { Cashfree, CFEnvironment } = require("cashfree-pg");
+const { createTemplateInProxmoxAccount, createTemplateInCloudSliceAccountAws } = require('../services/proxmoxService');
 
 const cashfree = new Cashfree(Cashfree.SANDBOX, process.env.CASHFREE_APP_ID, process.env.CASHFREE_SECRET_KEY)
 
@@ -645,11 +646,27 @@ const cashfreeCheckout = async (req, res) => {
 
     const user = await getUserData(userId, sessionToken);
 
+    // For any cart item whose `type` is missing/undefined, look it up from
+    // proxmoxcluster_lab. This happens because proxmox-cluster labs are not in
+    // getAllLabCatalogues so proceedToCheckout sets type=undefined for them.
+    // All other lab types already have type set by the standard catalogue lookup.
+    for (const item of cartItems) {
+      if (!item.type && item.lab_id) {
+        const pxRes = await pool.query(
+          `SELECT 'proxmox-cluster' AS type FROM proxmoxcluster_lab WHERE labid = $1 LIMIT 1`,
+          [item.lab_id]
+        );
+        if (pxRes.rows.length) {
+          item.type = 'proxmox-cluster';
+        }
+      }
+    }
+
     const cartId = await saveCartToDatabase(userId, cartItems);
 
-    
+
     const totalAmount = cartItems.reduce(
-      (sum, item) => sum + parseFloat(item.price),
+      (sum, item) => sum + parseFloat(item.totalAmount),
       0
     );
 
@@ -679,7 +696,78 @@ const cashfreeCheckout = async (req, res) => {
       checkout_type: "LAB_PURCHASE"
     }
     };
+    console.log(request)
+    //FIXED LINE
+    const response = await cashfree.PGCreateOrder(request);
 
+    return res.status(200).send({
+      success: true,
+      payment_session_id: response.data.payment_session_id,
+      order_id: orderId,
+    });
+
+  } catch (error) {
+    console.error("Cashfree checkout error:", error);
+    return res.status(500).send({
+      success: false,
+      message: error.message || "Internal server error",
+    });
+  }
+};
+
+//template creation in other account
+const templateCheckout = async (req, res) => {
+  try {
+    const { userId, orgId, seats,cartItems, org,targetCredentialId,sourceCredentialId } = req.body;
+    if (!userId || !cartItems || cartItems.length === 0) {
+      return res.status(400).send({
+        success: false,
+        message: "User ID and cart items are required",
+      });
+    }
+
+    const cookies = cookie.parse(req.headers.cookie || "");
+    const sessionToken = cookies.session_token;
+
+    const user = await getUserData(userId, sessionToken);
+    
+    const totalAmount = cartItems.price;
+
+    const orderId = `order_${Date.now()}`;
+
+    const request = {
+      order_id: orderId,
+      order_amount: totalAmount,
+      order_currency: "INR",
+
+      customer_details: {
+        customer_id: userId,
+        customer_name: user?.name,
+        customer_email: user?.email,
+        customer_phone: user?.phone || "9999999999",
+      },
+
+      order_meta: {
+      return_url: `${process.env.FRONTEND_URL}/dashboard/labs/${cartItems?.proxmoxType === 'singlevm-proxmox' ? 'cloud-vms' : (cartItems?.type === 'cloudslice-template') ? 'cloud-slices' : 'cluster' }`,
+    },
+      order_tags: {
+      user_id: String(userId),
+      labId: String(cartItems?.lab_id || ""),
+      orgId: String(orgId || ""),
+      node: String(cartItems?.node || ""),
+      vmid: String(cartItems?.vmId || ""),
+      org: String(org || ""),
+      total: String(totalAmount || 0),
+      type:String(cartItems?.proxmoxType || cartItems?.type ||""),
+
+      id: String(orderId || ""),
+      sourceCredentialId:String(sourceCredentialId || ""),
+      targetCredentialId:String(targetCredentialId || ""),
+      seats:String(seats || 0),
+      checkout_type: "TEMPLATE_CREATION"
+    }
+    };
+    console.log(request)
     //FIXED LINE
     const response = await cashfree.PGCreateOrder(request);
 
@@ -892,7 +980,7 @@ const insertPaymentAndAssignLab = async (paymentData) => {
   const userId = meta.user_id;
   const cartId = meta.cart_id;
   const org = meta.org === "true";
-
+  console.log("paymentData:",paymentData)
   if (!userId || !cartId) {
     console.error("Missing metadata in payment:", meta);
     return;
@@ -906,7 +994,6 @@ const insertPaymentAndAssignLab = async (paymentData) => {
     // Get cart items
     const cartResult = await pool.query(cartQueries.GET_CART_DATA, [cartId]);
     const cartItems = cartResult.rows[0]?.cart_data || [];
-
     for (const item of cartItems) {
       const {
         lab_id,
@@ -1107,6 +1194,82 @@ const insertPaymentAndAssignLab = async (paymentData) => {
           severity:"medium"
         })
         }
+        else if(type === 'proxmox-cluster'){
+          // Proxmox Cluster lab purchase — create org assignment.
+          // We use user?.org_id directly (not the org flag) so that both
+          // orgsuperadmin (org=true) AND labadmin (org=false but has org_id) work.
+          const orgIdToUse = (org && user?.org_id);
+
+          if(orgIdToUse){
+            // Get purchased_id from insertLab if available (org flag was true)
+            const purchasedId = insertLab?.rows?.[0]?.purchased_id || null;
+
+            // Check if org assignment already exists (avoid duplicate key error)
+            const existingAssign = await pool.query(
+              `SELECT id FROM proxmoxcluster_org_assignment WHERE labid=$1 AND orgid=$2 LIMIT 1`,
+              [lab_id, orgIdToUse]
+            );
+
+            if(!existingAssign.rows.length){
+              assignLab = await pool.query(
+                `INSERT INTO proxmoxcluster_org_assignment
+                   (labid, orgid, assigned_by, status, purchased, purchased_id, startdate, enddate)
+                 VALUES ($1, $2, $3, 'available', true, $4,
+                         NOW(), NOW() + ($5 * INTERVAL '1 day'))
+                 RETURNING *`,
+                [lab_id, orgIdToUse, user?.id, purchasedId, Number(duration) || 30]
+              );
+              console.log(`[proxmoxCluster] org assignment created for lab=${lab_id} org=${orgIdToUse}`);
+            } else {
+              console.log(`[proxmoxCluster] org assignment already exists for lab=${lab_id} org=${orgIdToUse}`);
+            }
+          }
+          else{
+            const assignLab = await pool.query(cartQueries.INSERT_ASSIGNLAB_PROXMOX_CLUSTER_PURCHASED,[lab_id,user?.id,Number(duration),hoursPerDay,paymentId]);
+            const vmConfigsRes = await pool.query(cartQueries.GET_VM_CONFIGS_BY_LAB, [lab_id]);
+          if (!vmConfigsRes.rows.length) {
+              return res.status(404).json({ success: false, message: 'No VM configurations found for this lab' });
+          }
+          const vmConfigs = vmConfigsRes.rows;
+          for (const vmConfig of vmConfigs) {
+                              await pool.query(cartQueries.INSERT_USER_VM, [
+                                  assignLab.rows[0].id,
+                                  lab_id,
+                                  user?.id,
+                                  vmConfig.id,
+                                  vmConfig.vm_label,
+                                  null,   // proxmox_vmid — filled at launch time
+                                  null,   // vmname      — filled at launch time
+                                  vmConfig.node,
+                                  vmConfig.protocol,
+                                  vmConfig.username,
+                                  vmConfig.password
+                              ]);
+                          }
+          }
+          // Only increment remaining if the lab has a defined seat limit (not unlimited = -1)
+          await pool.query(
+            `UPDATE proxmoxcluster_lab
+             SET remaining = remaining + $1
+             WHERE labid = $2 AND remaining <> -1`,
+            [quantity, lab_id]
+          );
+          await pool.query(`
+            UPDATE proxmoxcluster_lab
+            SET total_enrollments = total_enrollments + $1
+            WHERE labid = $2`,
+            [quantity,lab_id]
+            )
+
+          await sendLabNotification({
+            user_id,
+            lab_id,
+            type:  'lab_assigned',
+            title: 'Lab Assigned',
+            message: `${name} lab assigned to ${user?.name || user_id}`,
+            severity: 'medium'
+          });
+        }
       }
 
     await pool.query("COMMIT");
@@ -1198,6 +1361,7 @@ const handleCashfreeWebhook = async (req, res) => {
     //  Get metadata (same as Stripe metadata)
     const meta = paymentData.order.order_tags || {};
     const type = meta.checkout_type;
+    const labType = meta.type;
     await pool.query("BEGIN");
 
     if (type === "LAB_PURCHASE") {
@@ -1207,6 +1371,14 @@ const handleCashfreeWebhook = async (req, res) => {
     }
     else if(type === "PLAN_PURCHASE"){
       await subscriptionPurchase(paymentData)
+    }
+    else if(type === "TEMPLATE_CREATION"){
+        if(labType === 'cloudslice-template' ){
+            await createTemplateInCloudSliceAccountAws(paymentData)
+        }
+        else{
+        await createTemplateInProxmoxAccount(paymentData)
+      }
     }
 
     await pool.query("COMMIT");
@@ -1959,5 +2131,6 @@ module.exports = {
     extensionCashfreeCheckout,
     handleCashfreeWebhook,
     getUsersData,
-    subscriptionCheckout
+    subscriptionCheckout,
+    templateCheckout
 }

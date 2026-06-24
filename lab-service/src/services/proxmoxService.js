@@ -2,6 +2,7 @@ const proxmoxQueries = require('./promoxQueries');
 const labQueries = require('./labQueries')
 const pool = require('../db/dbConfig');
 const axios = require('axios');
+const https = require("https");
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
@@ -13,7 +14,9 @@ const { getUserEmail, markEmailAsSent, isWithinQuietHours, nowInTz, emailPlaceho
 const { sendNotificationToMail } = require('./notificationServices');
 const { sendNotification } = require('../socket');
 const promoxQueries = require('./promoxQueries');
+const proxmoxClusterQueries = require('./proxmoxClusterQueries');
 const batchesQueries = require('./batchesQueries');
+const labCartQueries = require('./labCartQueries');
 
 const PROXMOX_URL = process.env.PROXMOX_URL;
 const TOKEN_ID = process.env.PROXMOX_TOKEN_ID;
@@ -29,6 +32,46 @@ const api = axios.create({
   },
   httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false })
 });
+
+const getTheCredentialAccount = async (labId)=>{
+    if(!labId) throw new Error('Lab id is required');
+    const getCredentialId = await pool.query(`select credential_id from singlevmproxmox_lab where labid=$1`,[labId]);
+    if(!getCredentialId.rowCount > 0) throw new Error("No credential id found for this lab");
+    const getCredentialData = await pool.query(`select credentials from global_cloud_credentials where id=$1 union all select credentials from org_cloud_credentials where id=$1`,[getCredentialId.rows[0].credential_id])
+    if(!getCredentialData.rowCount > 0) throw new Error("No credentials found for the id");
+    const credential = getCredentialData.rows[0].credentials;
+   
+    const api = axios.create({
+    baseURL: credential.api_url,
+    timeout: 0,
+    headers: { Authorization: `PVEAPIToken=${credential.token}=${credential.secret_key}` },
+    httpsAgent: new https.Agent({ rejectUnauthorized: false })
+    });
+    return api
+}
+const getApi = async(id)=>{
+   if(!id) throw new Error('Please provide the id')
+   const credential = await getCredentialById(id);
+  if(!credential) throw new Error('No credential is found')
+   const api = axios.create({
+    baseURL: credential.api_url,
+    timeout: 0,
+    headers: { Authorization: `PVEAPIToken=${credential.token}=${credential.secret_key}` },
+    httpsAgent: new https.Agent({ rejectUnauthorized: false })
+    });
+    return api
+  }
+
+const calculateNewEndDate = (startDate, endDate) => {
+    const oldStart = new Date(startDate);
+    const oldEnd = new Date(endDate);
+
+    // Duration in milliseconds
+    const duration = oldEnd.getTime() - oldStart.getTime();
+
+    // New end date from now
+    return new Date(Date.now() + duration);
+};
 
 //detect the os
 const detectOS = async (ostype) => {
@@ -69,7 +112,7 @@ const detectOS = async (ostype) => {
 /**
  * Detect OS type (windows | linux | unknown) from Proxmox VM
  */
-const detectOSFromProxmox = async (node, vmid) => {
+const detectOSFromProxmox = async (node, vmid, api) => {
   try {
     const resp = await api.get(`/nodes/${node}/qemu/${vmid}/config`);
     const config = resp.data.data;
@@ -145,8 +188,6 @@ const getOSConfig = async(os)=> {
   };
 }
 
-
-
 //get ip
 const getVmIp=async(node, vmid) =>{
   const res = await api.get(`/nodes/${node}/qemu/${vmid}/agent/network-get-interfaces`);
@@ -164,7 +205,6 @@ const getVmIp=async(node, vmid) =>{
 
   throw new Error("No IP detected");
 }
-
 
 const getSingleVmProxmoxLab = async (req, res) => {
   try {
@@ -217,7 +257,7 @@ const getSingleVmProxmoxLab = async (req, res) => {
 
 const createSingleVmProxmoxConfig = async(req,res)=>{
    try {
-     const {data,user} = req.body;
+     const {data,user,cloud_credentials} = req.body;
      const {details,platform,proxmoxConfig,type} = data;
       const { userGuides = [], labGuides = [] } = data;
              const savedUserGuidePaths = [];
@@ -249,7 +289,7 @@ const createSingleVmProxmoxConfig = async(req,res)=>{
      }
      const vmDetailsId = insertVMDetails.rows[0].vmdetails_id;
      const labId = insertVMDetails.rows[0].labid;
-     const insertLabDetails = await pool.query(proxmoxQueries.INSERT_LAB_DETAILS,[labId,user,details.title,details.description,type,platform,savedLabGuidePaths,savedUserGuidePaths,details.guacamoleName,details.guacamoleUrl,details.learningObjectives,details.prerequisites,details.targetAudience,details.technologies,details.additionalDetails,vmDetailsId,proxmoxConfig.startDate,proxmoxConfig.endDate,proxmoxConfig.username,proxmoxConfig.password]);
+     const insertLabDetails = await pool.query(proxmoxQueries.INSERT_LAB_DETAILS,[labId,user,details.title,details.description,type,platform,savedLabGuidePaths,savedUserGuidePaths,details.guacamoleName,details.guacamoleUrl,details.learningObjectives,details.prerequisites,details.targetAudience,details.technologies,details.additionalDetails,vmDetailsId,proxmoxConfig.startDate,proxmoxConfig.endDate,proxmoxConfig.username,proxmoxConfig.password,cloud_credentials.cloud_id]);
      if(!insertLabDetails.rows.length){
       return res.status(404).send({
         success:false,
@@ -277,7 +317,8 @@ const createSingleVmProxmoxConfig = async(req,res)=>{
 
 const getStorages = async(req,res)=>{
     try {
-        const { NODE} = req.body;
+        const { NODE , credentialId} = req.body;
+        const api = await getApi(credentialId);
         const  {data}  = await api.get(`/nodes/${NODE}/storage`);
         return res.status(200).send({
             success:true,
@@ -299,13 +340,13 @@ const getStorages = async(req,res)=>{
 
  const getTemplatesByNode = async (req, res) => {
   try {
-    const {NODE} = req.body;
+    const { NODE , credentialId} = req.body;
+    const api = await getApi(credentialId);
     
-    if (!NODE) {
-      console.log("Node",req.body)
+    if (!NODE || !credentialId ) {
       return res.status(400).send({
         success: false,
-        message: "Node is required",
+        message: "Node or Credential Id is required",
       });
     }
 
@@ -337,6 +378,9 @@ const getStorages = async(req,res)=>{
 
 const getNextVmid = async (req, res) => {
   try {
+    const credentialId = req.body;
+    if(!credentialId) throw new Error("No credential id is found");
+    const api = await getApi(credentialId);
     const { data } = await api.get("/cluster/nextid");
     return res.status(200).send({
       success: true,
@@ -356,8 +400,8 @@ const getNextVmid = async (req, res) => {
 
 const getIsos = async(req,res) =>{
     try {
-         const { NODE,storage } = req.body;
-         console.log(req.body)
+         const { NODE,storage, credentialId } = req.body;
+         const api = await getApi(credentialId);
      if (!storage) return res.status(400).send({ success:false,message: "Missing storage" });
 
     const { data } = await api.get(`/nodes/${NODE}/storage/${storage}/content`);
@@ -380,7 +424,8 @@ const getIsos = async(req,res) =>{
 
 const getNetworkBridges = async (req,res)=>{
     try {
-        const {NODE} = req.body
+        const { NODE , credentialId} = req.body
+        const api = await getApi(credentialId);
         const { data } = await api.get(`/nodes/${NODE}/network`);
         console.log('data:',data.data)
     const bridges = data.data.filter(n => n.type === "bridge");
@@ -401,7 +446,8 @@ const getNetworkBridges = async (req,res)=>{
 
 const getCpuModels = async(req,res)=>{
     try {
-        const {NODE} = req.body;
+        const { NODE, credentialId} = req.body;
+        const api = await getApi(credentialId);
           const { data } = await api.get(`/nodes/${NODE}/capabilities/qemu/cpu`);
           return res.status(200).send({
             success:true,
@@ -424,6 +470,8 @@ const getCpuModels = async(req,res)=>{
 const getClusterResources = async (req, res) => {
   try {
     // 1. Get all nodes in the cluster
+    const { id } = req.params; 
+    const api = await getApi(id);
     const { data } = await api.get("/nodes");
     const nodes = data.data;
     const results = [];
@@ -617,6 +665,8 @@ const createVM = async (req, res) => {
         message:"Please provide all required fields"
       })
     }
+    //Get the Ip
+    const api = await getTheCredentialAccount(labid);
   // 1️⃣ Get next VMID
     const { data } = await api.get("/cluster/nextid");
     const vmid = data.data;
@@ -683,7 +733,7 @@ if (storage && Number(storage) > 0) {
     console.log(`🚀 VM ${vmid} started`);
  if(type === 'org'){
   await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG,[true,labid,vmid,userid]);
-   await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[false,labid,userid])
+   await pool.query(proxmoxQueries.UPDATE_LAUNCH_ORG_LOADING,[false,labid,userid,false]);
  }
  else{
   await pool.query(proxmoxQueries.UPDATE_LAUNCH,[true,node,labid,vmid]);
@@ -711,12 +761,14 @@ if (storage && Number(storage) > 0) {
 const createUserVm = async (req,res)=>{
   try {
     const {labid,name,type,purchased,userid,vmdetailsId,duration,number_hours_day} = req.body;
-    if(!labid||!name||!type||!userid ||!duration){
+    
+    if(!labid||!name||!type||!userid){
       return res.status(400).send({
         success:false,
         message:'Please provide all required fields'
       })
     }
+    const api = await getTheCredentialAccount(labid);
      const { data } = await api.get("/cluster/nextid");
     const vmid = data.data;
     const getTempInfo =  await pool.query(proxmoxQueries.GET_TEMPLATE_INFORMATION,[labid]);
@@ -970,7 +1022,7 @@ async function configureWindowsVM(node, vmid, username, password) {
 // }
 // Prepare VM After Clone - Works for BOTH Windows & Linux
 
-async function getVmIP(node, vmid) {
+async function getVmIP(node, vmid, api) {
   const maxRetries = 15;
   const delay = 3000;
 
@@ -1018,7 +1070,7 @@ const startVM = async (req, res) => {
         message:"Please provide required fields"
       })
      }
-
+     const api = await getTheCredentialAccount(lab_id);
       //  Get current VM status
     const statusResp = await api.get(
       `/nodes/${node}/qemu/${vmid}/status/current`
@@ -1051,8 +1103,8 @@ const startVM = async (req, res) => {
        await pool.query(proxmoxQueries.UPDATE_LAUNCH_USER_RUNNINGSTATUS,[true,lab_id,userid,'started'])
      }
      await pool.query('COMMIT');
-    const hostname = await getVmIP(node,vmid);
-    const osInfo = await detectOSFromProxmox(node, vmid);
+    const hostname = await getVmIP(node,vmid,api);
+    const osInfo = await detectOSFromProxmox(node, vmid, api);
     const os = osInfo?.os ?? null;
     if(!hostname || !os){
       return res.status(404).send({
@@ -1097,7 +1149,7 @@ const stopVM = async (req, res) => {
         message: "Please provide all required fields"
       });
     }
-
+    const api = await getTheCredentialAccount(lab_id);
     //  Get current VM status
     const statusResp = await api.get(
       `/nodes/${node}/qemu/${vmid}/status/current`
@@ -1167,8 +1219,6 @@ const stopVM = async (req, res) => {
     });
   }
 };
-
-
 
 //check vm status of lab
 const checkVMStatus =  async(req,res)=>{
@@ -1257,7 +1307,7 @@ const editProxmoxVm = async (req, res) => {
     if (!node ) {
       return res.status(400).send({ success: false, message: "Missing node or vmid" });
     }
-
+    const api = await getTheCredentialAccount(labId);
     if(vmid){
        // 1. Check VM status
     const vmStatus = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
@@ -1323,70 +1373,225 @@ const editProxmoxVm = async (req, res) => {
 };
 
 //delete the vm
+// const deleteVmInProxmox = async (req, res) => {
+//   try {
+//     const { labId,node, vmid,type,orgId,adminId } = req.body;
+//     let deleteResp;
+//     if(vmid){
+//        // Step 1: Get VM status
+//     const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
+//     const isRunning = statusResp.data.data.status === 'running';
+
+//     // Step 2: Stop the VM if it's running
+//     if (isRunning) {
+//       console.log(`VM ${vmid} is running — stopping before delete...`);
+//       await api.post(`/nodes/${node}/qemu/${vmid}/status/stop`);
+//       // Wait until it's fully stopped
+//       let stopped = false;
+//       for (let i = 0; i < 10; i++) {
+//         await new Promise(r => setTimeout(r, 2000)); // 2s interval
+//         const checkStatus = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
+//         if (checkStatus.data.data.status === 'stopped') {
+//           stopped = true;
+//           break;
+//         }
+//       }
+//       if (!stopped) {
+//         return res.status(400).send({
+//           success: false,
+//           message: 'VM did not stop in time — aborting delete for safety.',
+//         });
+//       }
+//     }
+
+//     // Step 3: Delete VM with purge=1 (full cleanup)
+
+//     console.log(`Deleting VM ${vmid} from node ${node}...`);
+//      deleteResp = await api.delete(`/nodes/${node}/qemu/${vmid}`, {
+//       params: { purge: 1 },
+//     });
+
+//     }
+   
+//     await pool.query('BEGIN');
+//     if(type === 'org'){
+//       await pool.query(proxmoxQueries.DELETE_USER_SINGLEVM_VMID,[labId,adminId]);
+//       await pool.query(proxmoxQueries.DELETE_SINGLEVM_ORG_LAB_vmid,[labId,orgId]);
+//     }
+//     else{
+//       await pool.query(proxmoxQueries.DELETE_USER_SINGLEVM_VMID,[labId,adminId]);
+//        await pool.query(proxmoxQueries.DELETE_ORGASSIGNED_LABS,[labId]);
+//       await pool.query(proxmoxQueries.DELETE_PROXMOX_LAB,[labId]);
+//     await pool.query(proxmoxQueries.DELETE_PROXMOX_LAB_CONFIG,[labId]);
+//     }
+//     await pool.query('COMMIT');
+
+    
+//       return res.status(200).send({
+//         success: true,
+//         message: `VM ${vmid} deleted successfully (with purge).`,
+       
+//       });
+
+//   } catch (error) {
+//     console.error('Error deleting VM:', error);
+//     // await pool.query('ROLLBACK');
+//     return res.status(500).send({
+//       success: false,
+//       message: 'Error deleting VM',
+//       error: error?.response?.data || error.message,
+//     });
+//   }
+// };
 const deleteVmInProxmox = async (req, res) => {
   try {
-    const { labId,node, vmid,type } = req.body;
-    let deleteResp;
-    if(vmid){
-       // Step 1: Get VM status
-    const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
-    const isRunning = statusResp.data.data.status === 'running';
+    const { labId, node, vmid, type, orgId, adminId } = req.body;
 
-    // Step 2: Stop the VM if it's running
-    if (isRunning) {
-      console.log(`VM ${vmid} is running — stopping before delete...`);
-      await api.post(`/nodes/${node}/qemu/${vmid}/status/stop`);
-      // Wait until it's fully stopped
-      let stopped = false;
-      for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 2000)); // 2s interval
-        const checkStatus = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
-        if (checkStatus.data.data.status === 'stopped') {
-          stopped = true;
-          break;
+    const deleteVmFromProxmox = async (node, vmid) => {
+      if (!node || !vmid) return;
+      const api = await getTheCredentialAccount(labId);
+      try {
+        const statusResp = await api.get(
+          `/nodes/${node}/qemu/${vmid}/status/current`
+        );
+
+        const isRunning =
+          statusResp.data.data.status === 'running';
+
+        if (isRunning) {
+          console.log(
+            `VM ${vmid} is running — stopping before delete...`
+          );
+
+          await api.post(
+            `/nodes/${node}/qemu/${vmid}/status/stop`
+          );
+
+          let stopped = false;
+
+          for (let i = 0; i < 10; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+
+            const checkStatus = await api.get(
+              `/nodes/${node}/qemu/${vmid}/status/current`
+            );
+
+            if (
+              checkStatus.data.data.status === 'stopped'
+            ) {
+              stopped = true;
+              break;
+            }
+          }
+
+          if (!stopped) {
+            throw new Error(
+              `VM ${vmid} did not stop in time`
+            );
+          }
         }
+
+        console.log(
+          `Deleting VM ${vmid} from node ${node}...`
+        );
+
+        await api.delete(
+          `/nodes/${node}/qemu/${vmid}`,
+          {
+            params: { purge: 1 },
+          }
+        );
+
+      } catch (err) {
+        console.error(
+          `Error deleting VM ${vmid}:`,
+          err.message
+        );
       }
-      if (!stopped) {
-        return res.status(400).send({
-          success: false,
-          message: 'VM did not stop in time — aborting delete for safety.',
-        });
-      }
-    }
+    };
 
-    // Step 3: Delete VM with purge=1 (full cleanup)
-
-    console.log(`Deleting VM ${vmid} from node ${node}...`);
-     deleteResp = await api.delete(`/nodes/${node}/qemu/${vmid}`, {
-      params: { purge: 1 },
-    });
-
-    }
-   
     await pool.query('BEGIN');
-    if(type === 'org'){
-      await pool.query(proxmoxQueries.DELETE_USER_SINGLEVM_VMID,[labId]);
-      await pool.query(proxmoxQueries.DELETE_SINGLEVM_ORG_LAB_vmid,[labId]);
+
+    const deletedVms = [];
+
+    // delete vm passed directly
+    if (vmid && node) {
+      deletedVms.push({ vmid, node });
     }
-    
-    else{
-      await pool.query(proxmoxQueries.DELETE_USER_SINGLEVM_VMID,[labId]);
-       await pool.query(proxmoxQueries.DELETE_SINGLEVM_ORG_LAB_vmid,[labId])
-      await pool.query(proxmoxQueries.DELETE_PROXMOX_LAB,[labId]);
-    await pool.query(proxmoxQueries.DELETE_PROXMOX_LAB_CONFIG,[labId]);
+
+    if (type === 'org') {
+      const userVmResult = await pool.query(
+        proxmoxQueries.DELETE_USER_SINGLEVM_VMID,
+        [labId, adminId]
+      );
+
+      deletedVms.push(...userVmResult.rows);
+
+      const orgVmResult = await pool.query(
+        proxmoxQueries.DELETE_SINGLEVM_ORG_LAB_vmid,
+        [labId, orgId]
+      );
+
+      deletedVms.push(...orgVmResult.rows);
+    } else {
+      const userVmResult = await pool.query(
+        proxmoxQueries.DELETE_USER_SINGLEVM_VMID,
+        [labId, adminId]
+      );
+
+      deletedVms.push(...userVmResult.rows);
+
+      const orgAssignedResult = await pool.query(
+        proxmoxQueries.DELETE_ORGASSIGNED_LABS,
+        [labId]
+      );
+
+      deletedVms.push(...orgAssignedResult.rows);
+
+      const labResult = await pool.query(
+        proxmoxQueries.DELETE_PROXMOX_LAB,
+        [labId]
+      );
+
+      deletedVms.push(...labResult.rows);
+
+      const configResult = await pool.query(
+        proxmoxQueries.DELETE_PROXMOX_LAB_CONFIG,
+        [labId]
+      );
+
+      deletedVms.push(...configResult.rows);
     }
+
+    // delete all proxmox VMs returned by delete queries
+    const uniqueVms = [
+      ...new Map(
+        deletedVms
+          .filter(vm => vm?.vmid && vm?.node)
+          .map(vm => [`${vm.node}-${vm.vmid}`, vm])
+      ).values()
+    ];
+
+    for (const vm of uniqueVms) {
+      await deleteVmFromProxmox(
+        vm.node,
+        vm.vmid
+      );
+    }
+
     await pool.query('COMMIT');
 
-    
-      return res.status(200).send({
-        success: true,
-        message: `VM ${vmid} deleted successfully (with purge).`,
-       
-      });
+    return res.status(200).send({
+      success: true,
+      message: 'VM(s) deleted successfully.',
+      deletedCount: uniqueVms.length,
+    });
 
   } catch (error) {
-    console.error('Error deleting VM:', error?.response?.data || error.message);
-    // await pool.query('ROLLBACK');
+    await pool.query('ROLLBACK');
+
+    console.error('Error deleting VM:', error);
+
     return res.status(500).send({
       success: false,
       message: 'Error deleting VM',
@@ -1397,8 +1602,9 @@ const deleteVmInProxmox = async (req, res) => {
 
 const deleteVMOFProxmox = async(req,res)=>{
   try {
-    const { node, vmid } = req.body;
+    const { node, vmid , labId } = req.body;
     let deleteResp;
+    const api = await getTheCredentialAccount(labId)
     if(vmid){
        // Step 1: Get VM status
     const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
@@ -1453,9 +1659,9 @@ const deleteVMOFProxmox = async(req,res)=>{
 //create a template
 const createTemplateInProxmox = async(req,res) =>{
   try {
-    const {labId,node, vmid} = req.body;
+    const {labId,node, vmid,credentialId,seats} = req.body;
     console.log(` Checking VM ${vmid} on node ${node}...`);
-
+    const api = await getTheCredentialAccount(labId);
     //  Get VM status
     const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
     if (!statusResp.data?.data) throw new Error("VM not found in Proxmox");
@@ -1506,9 +1712,8 @@ const createTemplateInProxmox = async(req,res) =>{
     }
 
     console.log(` Storage "${storage}" verified.`);
-
     //  Convert to template
-    await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[true]);
+    await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[true,labId]);
     console.log(`Converting VM ${vmid} to template...`);
     const templateResp = await api.post(`/nodes/${node}/qemu/${vmid}/template`);
 
@@ -1520,7 +1725,8 @@ const createTemplateInProxmox = async(req,res) =>{
         message:"Could not insert template information"
        })
     }
-    await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[false])
+    await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[false,labId])
+    await pool.query(proxmoxQueries.UPDATE_LAB,[credentialId,seats,labId]);
     return res.status(200).send({
       success: true,
       message: `VM ${vmid} converted to template successfully.`,
@@ -1528,14 +1734,1380 @@ const createTemplateInProxmox = async(req,res) =>{
     });
   } catch (err) {
     console.error(` Template creation failed: ${err.message}`);
-    await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[false])
+    await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[false,labId])
     return res.status(500).send({ success: false,
        message:'Internal server error' ,
        error:err.message 
       });
   }
 }
+//CREATE TEMPLATE TO OTHER ACCOUNT
+// const createTemplateInProxmoxAccount = async(sessionData) =>{
+//   try {
+//     const {labId,node, vmid,user_id,orgId,total,id} = sessionData?.order.order_tags;
 
+//     await pool.query('BEGIN')
+//         const existing = await pool.query(
+//       "SELECT 1 FROM payments WHERE session_id = $1",
+//       [sessionData.order.order_id]
+//     );
+
+//     if (existing.rows.length) {
+//       console.log("Already processed webhook");
+//       return;
+//     }
+ 
+//     console.log(` Checking VM ${vmid} on node ${node}...`);
+
+//     //  Get VM status
+//     const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
+//     if (!statusResp.data?.data) throw new Error("VM not found in Proxmox");
+
+//     let vmStatus = statusResp.data.data.status;
+//     console.log(` Current VM status: ${vmStatus}`);
+
+//     //  Stop VM if running
+//     if (vmStatus === "running") {
+//       console.log(` VM ${vmid} is running — stopping it now...`);
+//       await api.post(`/nodes/${node}/qemu/${vmid}/status/stop`);
+
+//       // Wait until VM actually stops
+//       let retries = 0;
+//       while (retries < 15) { // up to ~15 seconds
+//         await new Promise(r => setTimeout(r, 1000));
+//         const check = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
+//         vmStatus = check.data.data.status;
+//         if (vmStatus === "stopped") break;
+//         retries++;
+//       }
+
+//       if (vmStatus !== "stopped") {
+//         throw new Error(`Failed to stop VM ${vmid} after waiting 15 seconds.`);
+//       }
+
+//       console.log(` VM ${vmid} stopped successfully.`);
+//     }
+
+//     // Check VM has a disk
+//     const configResp = await api.get(`/nodes/${node}/qemu/${vmid}/config`);
+//     const disks = Object.keys(configResp.data.data).filter(k =>
+//       k.startsWith("ide") || k.startsWith("scsi") || k.startsWith("sata") || k.startsWith("virtio")
+//     );
+//     if (disks.length === 0) throw new Error(`VM ${vmid} has no disk attached — cannot create template.`);
+
+//     console.log(` VM has ${disks.length} disk(s): ${disks.join(", ")}`);
+
+//     // Verify storage
+//     const storageResp = await api.get(`/nodes/${node}/storage`);
+//     const storageList = storageResp.data.data.map(s => s.storage);
+
+//     const vmDisk = configResp.data.data[disks[0]];
+//     const storage = vmDisk.split(":")[0];
+
+//     if (!storageList.includes(storage)) {
+//       throw new Error(`Storage "${storage}" not available on node ${node}.`);
+//     }
+
+//     console.log(` Storage "${storage}" verified.`);
+//     const deleteFromOrg = await pool.query(proxmoxQueries.DELETE_SINGLEVM_ORG_LAB,[labId,orgId,user_id]);
+//     if(!deleteFromOrg.rows.length) return
+//     const getVMDetails = await pool.query(proxmoxQueries.GET_LAB_STATUS,[labId,vmid]);
+//     if(!getVMDetails.rows.length) return
+//     const vmDetails = getVMDetails.rows[0];
+//     const insertVMDetails = await pool.query(promoxQueries.INSERT_VM_DETAILS,[node,vmDetails.vmname,vmDetails.description,vmDetails.storagetype,vmDetails.storage,vmDetails.cpu,vmDetails.ram,vmDetails.networkbridge,vmDetails.nicmodel,vmDetails.firewall,vmDetails.boot,vmDetails.template_id]);
+//     if(!insertVMDetails.rows.length) return
+//     const getLabDetails = await pool.query(promoxQueries.GET_LAB_LABID,[labId]);
+//     if(!getLabDetails.rows.length) return;
+//     const labDetails = getLabDetails.rows[0];
+//     const insertLabDetails = await pool.query(proxmoxQueries.INSERT_LAB_DETAILS,[insertVMDetails.rows[0].labid,user_id,labDetails.title,labDetails.description,labDetails.type,labDetails.platform,labDetails.labguide,labDetails.userguide,labDetails.guacamole_url,labDetails.learning_objectives,labDetails.prerequisites,labDetails.target_audience,labDetails.key_technologies,labDetails.additional_details,labDetails.vmdetails_id,labDetails.startdate,labDetails.enddate,labDetails.username,labDetails.password])
+//     //  Convert to template
+//     await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[true,labId]);
+//     console.log(`Converting VM ${vmid} to template...`);
+//     const templateResp = await api.post(`/nodes/${node}/qemu/${vmid}/template`);
+
+//     console.log(`Template creation started: ${templateResp.data.data}`);
+//     const insertTemplate = await pool.query(proxmoxQueries.INSERT_TEMPLATE_INFORMATION,[insertVMDetails.rows[0].labid,vmid]);
+//     if(!insertTemplate.rows.length) return
+//        const insertData = await pool.query(labCartQueries.INSERT_PLAN_PAYMENT, [
+//           user_id,
+//           sessionData.order.order_id,
+//           sessionData.payment.cf_payment_id,
+//           total,
+//           sessionData.payment.payment_currency,
+//           sessionData.payment.payment_status,
+//           sessionData.customer_details?.customer_email,
+//           insertVMDetails.rows[0].labid,
+//           "template",
+//          orgId || null,
+//         ]);
+
+//     await pool.query(proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,[false,labId])
+//     await pool.query('COMMIT')
+//   } catch (err) {
+//     console.error(` Template creation failed: ${err.message}`);
+//     await pool.query('ROLLBACK');
+//     throw new Error(err);
+// }
+// }
+
+const waitForTaskCompletion = async (
+  api,
+  node,
+  upid,
+  timeout = 600000
+) => {
+  const start = Date.now();
+
+  while (true) {
+    if (Date.now() - start > timeout) {
+      throw new Error(`Task timeout: ${upid}`);
+    }
+
+    const statusResponse = await api.get(
+      `/nodes/${node}/tasks/${encodeURIComponent(
+        upid
+      )}/status`
+    );
+
+    const taskStatus =
+      statusResponse?.data?.data;
+
+    if (!taskStatus) {
+      throw new Error(
+        `Unable to fetch task status: ${upid}`
+      );
+    }
+
+    if (taskStatus.status === "stopped") {
+      if (
+        taskStatus.exitstatus &&
+        taskStatus.exitstatus !== "OK"
+      ) {
+        throw new Error(
+          `Task failed: ${taskStatus.exitstatus}`
+        );
+      }
+
+      return true;
+    }
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 3000)
+    );
+  }
+};
+
+const createProxmoxClient = (
+  credentials
+) => {
+  const httpsAgent = new https.Agent({
+    rejectUnauthorized: false
+  });
+
+  return axios.create({
+    baseURL: credentials.api_url,
+    httpsAgent,
+    headers: {
+      Authorization:
+        `PVEAPIToken=${credentials.token}=${credentials.secret_key}`
+    }
+  });
+};
+
+const getCredentialById = async (
+  credentialId
+) => {
+  const result = await pool.query(
+    proxmoxQueries.GET_CREDENTIAL_BY_ID,
+    [credentialId]
+  );
+
+  if (!result.rows.length) {
+    throw new Error(
+      `Credential not found: ${credentialId}`
+    );
+  }
+
+  return result.rows[0].credentials;
+};
+
+const getNextVMID = async (api) => {
+  const response = await api.get(
+    "/cluster/nextid"
+  );
+
+  return response?.data?.data;
+};
+
+const createTemplateInProxmoxAccount =
+  async (sessionData) => {
+    try {
+      const {
+        labId,
+        vmid,
+        user_id,
+        orgId,
+        total,
+        type,
+        sourceCredentialId,
+        targetCredentialId,
+        seats
+      } =
+        sessionData?.order?.order_tags;
+
+      await pool.query("BEGIN");
+
+      // Prevent duplicate webhook execution
+      const existing = await pool.query(
+        `
+        SELECT 1
+        FROM payments
+        WHERE session_id = $1
+      `,
+        [sessionData?.order?.order_id]
+      );
+
+      if (existing.rows.length) {
+        console.log(
+          "Webhook already processed"
+        );
+
+        await pool.query("ROLLBACK");
+
+        return;
+      }
+       // Payment entry
+      await pool.query(
+        labCartQueries.INSERT_PLAN_PAYMENT,
+        [
+          user_id,
+          sessionData.order.order_id,
+          sessionData.payment
+            .cf_payment_id,
+          total,
+          sessionData.payment
+            .payment_currency,
+          sessionData.payment
+            .payment_status,
+          sessionData.customer_details
+            ?.customer_email,
+          labId,
+          "template",
+          orgId || null
+        ]
+      );
+
+      // Fetch credentials
+      const sourceCredential =
+        await getCredentialById(
+          sourceCredentialId
+        );
+
+      const targetCredential =
+        await getCredentialById(
+          targetCredentialId
+        );
+
+      const sourceApi =
+        createProxmoxClient(
+          sourceCredential
+        );
+
+      const targetApi =
+        createProxmoxClient(
+          targetCredential
+        );
+
+      const sourceNode =
+        sourceCredential.node;
+
+      const targetNode =
+        targetCredential.node;
+     if(type === 'singlevm-proxmox'){
+      
+      console.log(
+        `Checking source VM ${vmid}`
+      );
+
+      // Check VM status
+      const statusResp =
+        await sourceApi.get(
+          `/nodes/${sourceNode}/qemu/${vmid}/status/current`
+        );
+
+      if (!statusResp?.data?.data) {
+        throw new Error(
+          "Source VM not found"
+        );
+      }
+
+      let vmStatus =
+        statusResp.data.data.status;
+
+      console.log(
+        `Source VM status: ${vmStatus}`
+      );
+
+      // Stop VM if running
+      if (vmStatus === "running") {
+        console.log(
+          `Stopping source VM ${vmid}`
+        );
+
+        const stopResp =
+          await sourceApi.post(
+            `/nodes/${sourceNode}/qemu/${vmid}/status/stop`
+          );
+
+        const stopTaskUPID =
+          stopResp?.data?.data;
+
+        await waitForTaskCompletion(
+          sourceApi,
+          sourceNode,
+          stopTaskUPID
+        );
+
+        console.log(
+          `VM ${vmid} stopped successfully`
+        );
+      }
+
+      // Validate VM config
+      const configResp =
+        await sourceApi.get(
+          `/nodes/${sourceNode}/qemu/${vmid}/config`
+        );
+
+      const config =
+        configResp?.data?.data;
+
+      if (!config) {
+        throw new Error(
+          "Unable to fetch VM config"
+        );
+      }
+      // Remove local ISO cdroms
+const cdromKeys = Object.keys(config)
+  .filter(key => {
+    const value = config[key];
+
+    return (
+      (
+        /^ide\d+$/.test(key) ||
+        /^sata\d+$/.test(key)
+      ) &&
+      typeof value === "string" &&
+      value.includes("media=cdrom")
+    );
+  });
+
+  console.log(
+    "CDROM Keys:",
+    cdromKeys
+  );
+
+for (const cdKey of cdromKeys) {
+
+  console.log(
+    `Detaching CDROM ${cdKey}`
+  );
+
+  await sourceApi.put(
+    `/nodes/${sourceNode}/qemu/${vmid}/config`,
+    {
+      delete: cdKey
+    }
+  );
+}
+
+console.log(
+  "CDROMs detached successfully"
+);
+
+    // Detect storage + bridge from source VM
+const diskKey =
+  Object.keys(config).find(
+    key =>
+      /^scsi\d+$/.test(key) ||
+      /^virtio\d+$/.test(key) ||
+      /^sata\d+$/.test(key) ||
+      /^ide\d+$/.test(key)
+  );
+
+if (!diskKey) {
+  throw new Error(
+    "Unable to determine VM storage"
+  );
+}
+
+const targetStorage =
+  config[diskKey]
+    ?.split(":")?.[0];
+
+const netKey = Object.keys(config).find(
+  key => key.startsWith("net")
+);
+
+let targetBridge = "vmbr0";
+
+if (netKey && config[netKey]) {
+  const bridgeMatch =
+    config[netKey].match(
+      /bridge=([^,]+)/i
+    );
+
+  if (bridgeMatch?.[1]) {
+    targetBridge =
+      bridgeMatch[1];
+  }
+}
+
+console.log({
+  targetStorage,
+  targetBridge
+});
+
+// Generate unique VMID
+const nextIdResp =
+  await targetApi.get(
+    "/cluster/nextid"
+  );
+
+const targetVMID =
+  Number(nextIdResp.data.data);
+
+console.log(
+  `Target VMID: ${targetVMID}`
+);
+
+// Target host
+const targetHost =
+  targetCredential.api_url
+    .replace("https://", "")
+    .replace("/api2/json", "")
+    .split(":")[0];
+
+// Correct token format
+const targetEndpoint =
+  `apitoken=${targetCredential.token}=${targetCredential.secret_key},host=${targetHost},fingerprint=${targetCredential.fingerprint}`;
+
+// Detect cluster
+const sourceClusterResp =
+  await sourceApi.get(
+    "/cluster/status"
+  );
+
+const targetClusterResp =
+  await targetApi.get(
+    "/cluster/status"
+  );
+
+const sourceCluster =
+  sourceClusterResp.data.data.find(
+    item => item.type === "cluster"
+  );
+
+const targetCluster =
+  targetClusterResp.data.data.find(
+    item => item.type === "cluster"
+  );
+
+const isSameCluster =
+  sourceCluster?.name &&
+  targetCluster?.name &&
+  sourceCluster.name ===
+    targetCluster.name;
+
+console.log({
+  sourceCluster:
+    sourceCluster?.name,
+  targetCluster:
+    targetCluster?.name,
+  isSameCluster
+});
+
+let taskUPID;
+
+if (isSameCluster) {
+
+  console.log(
+    "Same cluster detected"
+  );
+
+  const isLocalStorage =
+    targetStorage === "local" ||
+    targetStorage ===
+      "local-lvm";
+
+  if (
+    isLocalStorage &&
+    sourceNode !== targetNode
+  ) {
+
+    console.log(
+      "Local storage detected → clone same node then migrate"
+    );
+
+    // Step 1: Clone on same node
+    const cloneResp =
+      await sourceApi.post(
+        `/nodes/${sourceNode}/qemu/${vmid}/clone`,
+        {
+          newid: targetVMID,
+          full: 1,
+          name:
+            `${config.name}-template`
+        }
+      );
+
+    taskUPID =
+      cloneResp.data.data;
+
+    await waitForTaskCompletion(
+      sourceApi,
+      sourceNode,
+      taskUPID,
+      1800000
+    );
+
+    console.log(
+      "Clone completed"
+    );
+
+    // Step 2: Migrate cloned VM
+    const migrateResp =
+      await sourceApi.post(
+        `/nodes/${sourceNode}/qemu/${targetVMID}/migrate`,
+        {
+          target: targetNode,
+          online: 0
+        }
+      );
+
+    taskUPID =
+      migrateResp.data.data;
+
+    await waitForTaskCompletion(
+      sourceApi,
+      sourceNode,
+      taskUPID,
+      1800000
+    );
+
+    console.log(
+      "Migration completed"
+    );
+
+  } else {
+
+    console.log(
+      "Shared storage → direct clone"
+    );
+
+    const cloneResp =
+      await sourceApi.post(
+        `/nodes/${sourceNode}/qemu/${vmid}/clone`,
+        {
+          newid: targetVMID,
+          target: targetNode,
+          full: 1,
+          name:
+            `${config.name}-template`
+        }
+      );
+
+    taskUPID =
+      cloneResp.data.data;
+
+    await waitForTaskCompletion(
+      sourceApi,
+      sourceNode,
+      taskUPID,
+      1800000
+    );
+  }
+
+} else {
+
+  console.log(
+    "Different cluster detected → remote migration"
+  );
+
+  const migratePayload = {
+    "target-endpoint":
+      targetEndpoint,
+
+    "target-storage":
+      targetStorage,
+
+    "target-bridge":
+      targetBridge,
+
+    online: 0,
+
+    vmid: targetVMID
+  };
+
+  console.log(
+    "Migration payload:",
+    migratePayload
+  );
+
+  const migrateResp =
+    await sourceApi.post(
+      `/nodes/${sourceNode}/qemu/${vmid}/remote_migrate`,
+      migratePayload
+    );
+
+  taskUPID =
+    migrateResp.data.data;
+
+  await waitForTaskCompletion(
+    sourceApi,
+    sourceNode,
+    taskUPID,
+    1800000
+  );
+
+  console.log(
+    "Remote migration completed"
+  );
+}
+
+// Convert to template
+console.log(
+  `Converting target VM ${targetVMID} to template`
+);
+
+const templateResp =
+  await targetApi.post(
+    `/nodes/${targetNode}/qemu/${targetVMID}/template`
+  );
+
+const templateUPID =
+  templateResp.data.data;
+
+await waitForTaskCompletion(
+  targetApi,
+  targetNode,
+  templateUPID
+);
+
+console.log(
+  "Template conversion completed"
+);
+      /**
+       * DATABASE OPERATIONS
+       */
+
+      await pool.query(
+        proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,
+        [true, labId]
+      );
+
+      const getVMDetails =
+        await pool.query(
+          proxmoxQueries.GET_LAB_LABID_STATUS,
+          [labId]
+        );
+
+      if (
+        !getVMDetails.rows.length
+      ) {
+        throw new Error(
+          "VM details not found"
+        );
+      }
+
+      const vmDetails =
+        getVMDetails.rows[0];
+
+      const insertVMDetails =
+        await pool.query(
+          proxmoxQueries.COPY_VM_DETAILS,
+          [
+            targetNode,
+            vmDetails.vmname,
+            targetVMID,
+            vmDetails.description,
+            vmDetails.storagetype,
+            vmDetails.storage,
+            vmDetails.cpu,
+            vmDetails.ram,
+            vmDetails.networkbridge,
+            vmDetails.nicmodel,
+            vmDetails.firewall,
+            vmDetails.boot,
+            targetVMID
+          ]
+        );
+
+      if (
+        !insertVMDetails.rows.length
+      ) {
+        throw new Error(
+          "Unable to insert VM details"
+        );
+      }
+
+      const getLabDetails =
+        await pool.query(
+          proxmoxQueries.GET_LAB_LABID,
+          [labId]
+        );
+
+      if (
+        !getLabDetails.rows.length
+      ) {
+        throw new Error(
+          "Lab details not found"
+        );
+      }
+
+      const labDetails =
+        getLabDetails.rows[0];
+
+      const insertLabDetails =
+        await pool.query(
+          proxmoxQueries.COPY_LAB_DETAILS,
+          [
+            insertVMDetails.rows[0]
+              .labid,
+            user_id,
+            labDetails.title,
+            labDetails.description,
+            labDetails.type,
+            labDetails.platform,
+            labDetails.labguide,
+            labDetails.userguide,
+            labDetails.guacamole_name,
+            labDetails.guacamole_url,
+            labDetails.learning_objectives,
+            labDetails.prerequisites,
+            labDetails.target_audience,
+            labDetails.key_technologies,
+            labDetails.additional_details,
+            insertVMDetails.rows[0].vmdetails_id,
+            labDetails.startdate,
+            labDetails.enddate,
+            labDetails.username,
+            labDetails.password,
+            labId,
+            targetCredentialId,
+            seats,
+            seats
+          ]
+        );
+
+      const insertTemplate =
+        await pool.query(
+          proxmoxQueries.INSERT_TEMPLATE_INFORMATION,
+          [
+            insertVMDetails.rows[0]
+              .labid,
+            targetVMID
+          ]
+        );
+
+      if (
+        !insertTemplate.rows.length
+      ) {
+        throw new Error(
+          "Unable to insert template information"
+        );
+      }
+
+  
+      await pool.query(
+        proxmoxQueries.UPDATE_TEMPLATE_CREATION_PROCESS_STATUS,
+        [false, labId]
+      );
+
+      await pool.query("COMMIT");
+
+      console.log(
+        "Template creation completed successfully"
+      );
+
+     }
+
+     else if (type === 'proxmox-cluster'){
+        const getLabDetails = await pool.query(proxmoxClusterQueries.GET_CLUSTER_LAB_BY_ID,[labId]);
+        if(!getLabDetails.rowCount ) return;
+        const lab = getLabDetails.rows[0];
+        const getVMConfigs = await pool.query(proxmoxClusterQueries.GET_VM_CONFIGS_BY_LAB,[lab.labid]);
+        if(!getVMConfigs.rowCount ) return;
+        const vms = getVMConfigs.rows;
+        const newEndDate = calculateNewEndDate(
+            lab.startdate,
+            lab.enddate
+        );
+        const insertNewLab = await pool.query(proxmoxClusterQueries.COPY_LAB,[user_id,lab.title,lab.description,newEndDate,lab.labguide,lab.userguide,lab.software,targetCredentialId,lab.learning_objectives,lab.prerequisites,lab.target_audience,
+          lab.key_technologies,lab.additional_details,seats,seats
+        ])
+        if(!insertNewLab.rowCount) return;
+        const newLab = insertNewLab.rows[0];
+        await pool.query('COMMIT');
+        for (const vm of vms){
+          const vmid = vm.vmid;
+      console.log(
+        `Checking source VM ${vmid}`
+      );
+
+      // Check VM status
+      const statusResp =
+        await sourceApi.get(
+          `/nodes/${sourceNode}/qemu/${vmid}/status/current`
+        );
+
+      if (!statusResp?.data?.data) {
+        throw new Error(
+          "Source VM not found"
+        );
+      }
+
+      let vmStatus =
+        statusResp.data.data.status;
+
+      console.log(
+        `Source VM status: ${vmStatus}`
+      );
+
+      // Stop VM if running
+      if (vmStatus === "running") {
+        console.log(
+          `Stopping source VM ${vmid}`
+        );
+
+        const stopResp =
+          await sourceApi.post(
+            `/nodes/${sourceNode}/qemu/${vmid}/status/stop`
+          );
+
+        const stopTaskUPID =
+          stopResp?.data?.data;
+
+        await waitForTaskCompletion(
+          sourceApi,
+          sourceNode,
+          stopTaskUPID
+        );
+
+        console.log(
+          `VM ${vmid} stopped successfully`
+        );
+      }
+
+      // Validate VM config
+      const configResp =
+        await sourceApi.get(
+          `/nodes/${sourceNode}/qemu/${vmid}/config`
+        );
+
+      const config =
+        configResp?.data?.data;
+
+      if (!config) {
+        throw new Error(
+          "Unable to fetch VM config"
+        );
+      }
+      // Remove local ISO cdroms
+const cdromKeys = Object.keys(config)
+  .filter(key => {
+    const value = config[key];
+
+    return (
+      (
+        /^ide\d+$/.test(key) ||
+        /^sata\d+$/.test(key)
+      ) &&
+      typeof value === "string" &&
+      value.includes("media=cdrom")
+    );
+  });
+
+  console.log(
+    "CDROM Keys:",
+    cdromKeys
+  );
+
+for (const cdKey of cdromKeys) {
+
+  console.log(
+    `Detaching CDROM ${cdKey}`
+  );
+
+  await sourceApi.put(
+    `/nodes/${sourceNode}/qemu/${vmid}/config`,
+    {
+      delete: cdKey
+    }
+  );
+}
+
+console.log(
+  "CDROMs detached successfully"
+);
+
+    // Detect storage + bridge from source VM
+const diskKey =
+  Object.keys(config).find(
+    key =>
+      /^scsi\d+$/.test(key) ||
+      /^virtio\d+$/.test(key) ||
+      /^sata\d+$/.test(key) ||
+      /^ide\d+$/.test(key)
+  );
+
+if (!diskKey) {
+  throw new Error(
+    "Unable to determine VM storage"
+  );
+}
+
+const targetStorage =
+  config[diskKey]
+    ?.split(":")?.[0];
+
+const netKey = Object.keys(config).find(
+  key => key.startsWith("net")
+);
+
+let targetBridge = "vmbr0";
+
+if (netKey && config[netKey]) {
+  const bridgeMatch =
+    config[netKey].match(
+      /bridge=([^,]+)/i
+    );
+
+  if (bridgeMatch?.[1]) {
+    targetBridge =
+      bridgeMatch[1];
+  }
+}
+
+console.log({
+  targetStorage,
+  targetBridge
+});
+
+// Generate unique VMID
+const nextIdResp =
+  await targetApi.get(
+    "/cluster/nextid"
+  );
+
+const targetVMID =
+  Number(nextIdResp.data.data);
+
+console.log(
+  `Target VMID: ${targetVMID}`
+);
+
+// Target host
+const targetHost =
+  targetCredential.api_url
+    .replace("https://", "")
+    .replace("/api2/json", "")
+    .split(":")[0];
+
+// Correct token format
+const targetEndpoint =
+  `apitoken=${targetCredential.token}=${targetCredential.secret_key},host=${targetHost},fingerprint=${targetCredential.fingerprint}`;
+
+// Detect cluster
+const sourceClusterResp =
+  await sourceApi.get(
+    "/cluster/status"
+  );
+
+const targetClusterResp =
+  await targetApi.get(
+    "/cluster/status"
+  );
+
+const sourceCluster =
+  sourceClusterResp.data.data.find(
+    item => item.type === "cluster"
+  );
+
+const targetCluster =
+  targetClusterResp.data.data.find(
+    item => item.type === "cluster"
+  );
+
+const isSameCluster =
+  sourceCluster?.name &&
+  targetCluster?.name &&
+  sourceCluster.name ===
+    targetCluster.name;
+
+console.log({
+  sourceCluster:
+    sourceCluster?.name,
+  targetCluster:
+    targetCluster?.name,
+  isSameCluster
+});
+
+let taskUPID;
+
+if (isSameCluster) {
+
+  console.log(
+    "Same cluster detected"
+  );
+
+  const isLocalStorage =
+    targetStorage === "local" ||
+    targetStorage ===
+      "local-lvm";
+
+  if (
+    isLocalStorage &&
+    sourceNode !== targetNode
+  ) {
+
+    console.log(
+      "Local storage detected → clone same node then migrate"
+    );
+
+    // Step 1: Clone on same node
+    const cloneResp =
+      await sourceApi.post(
+        `/nodes/${sourceNode}/qemu/${vmid}/clone`,
+        {
+          newid: targetVMID,
+          full: 1,
+          name:
+            `${config.name}-template`
+        }
+      );
+
+    taskUPID =
+      cloneResp.data.data;
+
+    await waitForTaskCompletion(
+      sourceApi,
+      sourceNode,
+      taskUPID,
+      1800000
+    );
+
+    console.log(
+      "Clone completed"
+    );
+
+    // Step 2: Migrate cloned VM
+    const migrateResp =
+      await sourceApi.post(
+        `/nodes/${sourceNode}/qemu/${targetVMID}/migrate`,
+        {
+          target: targetNode,
+          online: 0
+        }
+      );
+
+    taskUPID =
+      migrateResp.data.data;
+
+    await waitForTaskCompletion(
+      sourceApi,
+      sourceNode,
+      taskUPID,
+      1800000
+    );
+
+    console.log(
+      "Migration completed"
+    );
+
+    // console.log(
+    //     `Cleaning up temporary clone ${targetVMID}`
+    // );
+
+    // const deleteResp =
+    //     await sourceApi.delete(
+    //         `/nodes/${sourceNode}/qemu/${targetVMID}`,
+    //         {
+    //             params: {
+    //                 purge: 1
+    //             }
+    //         }
+    //     );
+
+    // await waitForTaskCompletion(
+    //     sourceApi,
+    //     sourceNode,
+    //     deleteResp.data.data,
+    //     1800000
+    // );
+
+  } else {
+
+    console.log(
+      "Shared storage → direct clone"
+    );
+
+    const cloneResp =
+      await sourceApi.post(
+        `/nodes/${sourceNode}/qemu/${vmid}/clone`,
+        {
+          newid: targetVMID,
+          target: targetNode,
+          full: 1,
+          name:
+            `${config.name}-template`
+        }
+      );
+
+    taskUPID =
+      cloneResp.data.data;
+
+    await waitForTaskCompletion(
+      sourceApi,
+      sourceNode,
+      taskUPID,
+      1800000
+    );
+  }
+
+} else {
+
+  console.log(
+    "Different cluster detected → remote migration"
+  );
+
+  const migratePayload = {
+    "target-endpoint":
+      targetEndpoint,
+
+    "target-storage":
+      targetStorage,
+
+    "target-bridge":
+      targetBridge,
+
+    online: 0,
+
+    vmid: targetVMID
+  };
+
+  console.log(
+    "Migration payload:",
+    migratePayload
+  );
+
+  const migrateResp =
+    await sourceApi.post(
+      `/nodes/${sourceNode}/qemu/${vmid}/remote_migrate`,
+      migratePayload
+    );
+
+  taskUPID =
+    migrateResp.data.data;
+
+  await waitForTaskCompletion(
+    sourceApi,
+    sourceNode,
+    taskUPID,
+    1800000
+  );
+
+  console.log(
+    "Remote migration completed"
+  );
+}
+
+// Convert to template
+// console.log(
+//   `Converting target VM ${targetVMID} to template`
+// );
+
+// const templateResp =
+//   await targetApi.post(
+//     `/nodes/${targetNode}/qemu/${targetVMID}/template`
+//   );
+
+// const templateUPID =
+//   templateResp.data.data;
+
+// await waitForTaskCompletion(
+//   targetApi,
+//   targetNode,
+//   templateUPID
+// );
+
+// console.log(
+//   "Template conversion completed"
+// );
+      /**
+       * DATABASE OPERATIONS
+       */
+
+
+      const insertVMDetails =
+        await pool.query(
+          proxmoxClusterQueries.COPY_VM_CONFIGS,
+          [
+             newLab.labid,
+              vm.vm_label,
+              targetNode,
+              vm.template_id,
+              vm.cpu,
+              vm.ram,
+              vm.storage,
+              vm.storagetype,
+              vm.networkbridge,
+              vm.nicmodel,
+              vm.protocol,
+              vm.username,
+              vm.password,
+              targetVMID
+          ]
+        );
+
+      if (
+        !insertVMDetails.rows.length
+      ) {
+        throw new Error(
+          "Unable to insert VM details"
+        );
+      }
+      
+
+        }
+        await pool.query("COMMIT");
+      }
+    } 
+    catch (error) {
+      await pool.query('ROLLBACK');
+      console.log(
+        "FULL PROXMOX ERROR:",
+        JSON.stringify(
+          error?.response?.data,
+          null,
+          2
+        )
+      );
+
+  throw error;
+}
+  };
+
+const createTemplateInCloudSliceAccountAws = async(sessionData)=>{
+  try {
+      const {
+        labId,
+        user_id,
+        orgId,
+        total,
+        type,
+        sourceCredentialId,
+        targetCredentialId,
+        seats
+      } =
+        sessionData?.order?.order_tags;
+
+        await pool.query("BEGIN");
+
+      // Prevent duplicate webhook execution
+      const existing = await pool.query(
+        `
+        SELECT 1
+        FROM payments
+        WHERE session_id = $1
+      `,
+        [sessionData?.order?.order_id]
+      );
+
+      if (existing.rows.length) {
+        console.log(
+          "Webhook already processed"
+        );
+
+        await pool.query("ROLLBACK");
+
+        return;
+      }
+       // Payment entry
+      await pool.query(
+        labCartQueries.INSERT_PLAN_PAYMENT,
+        [
+          user_id,
+          sessionData.order.order_id,
+          sessionData.payment
+            .cf_payment_id,
+          total,
+          sessionData.payment
+            .payment_currency,
+          sessionData.payment
+            .payment_status,
+          sessionData.customer_details
+            ?.customer_email,
+          labId,
+          "template",
+          orgId || null
+        ]
+      );  
+
+      const getLab = await pool.query(`select * from cloudslicelab where labid=$1`,[labId]);
+      
+      if(!getLab.rowCount > 0)
+        throw new Error("Could not get the lab")
+      
+      const labDetails = getLab.rows[0];
+     const oldStartDate = new Date(labDetails.startdate);
+      const oldEndDate = new Date(labDetails.enddate);
+
+      const durationMs = oldEndDate.getTime() - oldStartDate.getTime();
+
+      const newStartDate = new Date(); // today
+      const newEndDate = new Date(newStartDate.getTime() + durationMs);
+      if(labDetails.modules === 'without-modules'){
+        const insertLab = await pool.query(proxmoxQueries.COPY_LAB_DATA,[user_id,JSON.stringify(labDetails.services),labDetails.region,newEndDate,labDetails.cleanuppolicy,labDetails.platform,labDetails.provider,labDetails.title,labDetails.description,labDetails.modules,labDetails.credits,labDetails.accounttype,labDetails.labguides,labDetails.userguides,labDetails.learning_objectives,labDetails.prerequisites,labDetails.target_audience,labDetails.key_technologies,labDetails.additional_details,seats,seats,targetCredentialId]);
+
+      }
+      else{
+        const insertlab =  await pool.query(promoxQueries.COPY_LAB_DATA_WITH_MODULES,[user_id,JSON.stringify(labDetails.services),labDetails.region,newEndDate,labDetails.platform,labDetails.provider,labDetails.title,labDetails.description,labDetails.modules,targetCredentialId,seats,seats]);
+         const getModules = await pool.query(`select * from modules where lab_id=$1`,[labId]);
+         for(let module of getModules.rows){
+            const insertModule =  await pool.query(promoxQueries.INSERT_MODULES,[module.name,module.description,insertlab.rows[0].labid,module.totalduration]);
+            const getExercises = await pool.query(`select * from exercises where module_id=$1`,[module.id]);
+            for(let exercise of getExercises.rows){
+                const insertExercise = await pool.query(promoxQueries.INSERT_EXERCISES,[insertModule?.rows[0]?.id,exercise.type]);
+              if(exercise.type === 'lab'){
+                const getLabExercises = await pool.query(`select * from lab_exercises where exercise_id=$1`,[exercise.id]);
+                if(!getLabExercises.rowCount ) continue;
+                for(let labExercise of getLabExercises.rows){
+                  const insertLabExercise = await pool.query(promoxQueries.INSERT_LAB_EXERCISES,[insertExercise?.rows[0]?.id,labExercise.estimated_duration,labExercise.instructions,labExercise.services,labExercise.files,labExercise.title,labExercise.cleanuppolicy]);
+                }
+              }
+              else if(exercise.type === 'questions'){
+                const getQuestions = await pool.query(`select * from questions where exercise_id=$1`,[exercise.id]);
+                if(!getQuestions.rowCount ) continue;
+                for(let question of getQuestions.rows){
+                  const insertQuestion = await pool.query(proxmoxQueries.INSERT_QUIZ_QUESTIONS,[insertExercise?.rows[0]?.id,question.question_text,question.description,question.correct_answer,question.estimated_duration,question.title,question.marks]);
+                  const getOptions = await pool.query(`select * from options where question_id=$1`,[question.id]);
+                  for(let option of getOptions.rows){
+                      await pool.query(proxmoxQueries.INSERT_QUIZ_OPTIONS,[insertQuestion.rows[0].id,option.option_text,option.option_id,option.is_correct]);
+                  }
+                }
+              }
+            }
+         }
+      }
+      await pool.query("COMMIT");
+  } catch (error) {
+
+     console.log("Error:",error);
+     await pool.query("ROLLBACK");
+     throw error;
+  }
+}
 //get template information
 const getTemplateInformation = async(req,res)=>{
   try {
@@ -1753,13 +3325,13 @@ const getSingleVMProxmoxLabs = async (req,res)=>{
 const deleteOrgAssignedLab = async(req,res)=>{
   try {
      const {labId,orgId,adminId,node,vmid} = req.body;
-     console.log(req.body)
   if(!labId || !orgId || !adminId){
     return res.status(400).send({
       success:false,
       message:"Please provide the required fields"
     })
   }
+  const api = await getTheCredentialAccount(labId);
   if(vmid){
     // Step 1: Get VM status
     const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
@@ -1824,7 +3396,6 @@ const deleteOrgAssignedLab = async(req,res)=>{
 const updateSingleVMProxmoxOrgTime = async(req,res)=>{
   try {
     const {identifier,labId, startTime,endTime,type} = req.body;
-    console.log(req.body)
     if(!identifier||!labId||! startTime||!endTime||!type ){
       return res.status(400).send({
         success:false,
@@ -1895,6 +3466,26 @@ const assignSingleVmToUser = async(req,res)=>{
                  ]);
              if (result.rows.length > 0) {
                  successfulAssignments.push(result.rows[0]);
+                 try {
+                     const purchaseCheck = await pool.query(
+                         `SELECT purchased_id FROM lab_batch_purchased WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+                         [lab, orgId]
+                     );
+                     if (purchaseCheck.rows.length > 0) {
+                         await pool.query(
+                             `UPDATE lab_batch_purchased SET assigned_users = GREATEST(COALESCE(assigned_users,0)+1,0) WHERE lab_id=$1 AND org_id=$2`,
+                             [lab, orgId]
+                         );
+                     } else {
+                         await pool.query(`UPDATE createlab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [lab]);
+                         await pool.query(`UPDATE cloudslicelab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+                         await pool.query(`UPDATE singlevmproxmox_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+                         await pool.query(`UPDATE singlevmdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE lab_id = $1 AND remaining != -1`, [lab]);
+                         await pool.query(`UPDATE vmclusterdatacenter_lab SET remaining = GREATEST(remaining - 1, 0) WHERE labid = $1 AND remaining != -1`, [lab]);
+                     }
+                 } catch (qtyError) {
+                     console.log('Error updating lab quantity after assignment:', qtyError.message);
+                 }
                  await pool.query('BEGIN');
                      const insertNotification = await pool.query(labQueries.INSERT_NOTIFICATION, ['lab_assigned', 'Lab Assigned', `A new lab has been assigned to you. Lab ID: ${lab}`,'medium', user,[JSON.stringify({
                  labId: lab,
@@ -1979,7 +3570,7 @@ const getUserSingleVMProxmoxLab = async(req,res)=>{
      let results =[];
      for(const lab of getUserLabs.rows){
       const getLabDetails = await pool.query(proxmoxQueries.GET_LAB_LABID,[lab.labid]);
-      const getLabConfig = await pool.query(proxmoxQueries.GET_LAB_CONFIGURATIONS,[getLabDetails.rows[0].vmdetails_id]);
+      const getLabConfig = await pool.query(proxmoxQueries.GET_LAB_CONFIGURATIONS,[getLabDetails.rows[0]?.vmdetails_id]);
       if(!getLabDetails.rows.length){
         return res.status(404).send({
           success:false,
@@ -2076,6 +3667,9 @@ const deleteSingleVMProxmoxUser = async(req,res)=>{
         message:"Please provide the required fields"
       })
     }
+
+    const api = await getTheCredentialAccount(labId);
+
     if(vmid){
     // Step 1: Get VM status
     const statusResp = await api.get(`/nodes/${node}/qemu/${vmid}/status/current`);
@@ -2214,5 +3808,7 @@ module.exports = {
     stopVM,
     deleteVMOFProxmox,
     getLabAdminsLab,
-    api
+    api,
+    createTemplateInProxmoxAccount,
+    createTemplateInCloudSliceAccountAws
 }

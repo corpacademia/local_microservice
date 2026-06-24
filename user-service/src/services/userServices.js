@@ -19,6 +19,12 @@ const {
 const handlebars = require('handlebars');
 const { sendNotification } = require('../socket');
 
+const ROLE_TO_FEATURE = {
+  user: "students",
+  trainer: "trainers",
+  labadmin: "labadmins"
+};
+
 const sendNotificationToMail = async (template, placeholders) => {
  
   // Load HTML template
@@ -397,6 +403,7 @@ const addUser = async (userData) => {
     const { id } = userData.user;
     const [orgName,orgType,orgId]= organization.split(',').map(val=>val.trim());
      const existingUser = await pool.query(userQueries.getUserByEmailQuery, [email]);
+     
   if (existingUser.rows.length > 0) {
     throw new Error('User with this email already exists ');
   }
@@ -483,7 +490,7 @@ try {
 };
 //bulk add user
 
- const bulkAddUser = async (users, orgId, id, orgName, orgType, role) => {
+ const bulkAddUser = async (users, orgId, id, orgName, orgType, role,license) => {
   try {
     const results = [];
 
@@ -542,6 +549,13 @@ try {
         'inactive'
       ]);
       }
+
+      //update usage
+      let roleFeature;
+      if(user?.role === 'user') roleFeature = 'students'
+      else roleFeature = user?.role
+      await pool.query(userQueries?.UPDATE_CATALOGUES_PLAN,[roleFeature,1,license?.id]);
+      
       
 
       // Prepare email template
@@ -749,7 +763,7 @@ const updateUserRole = async (userId, role) => {
   const deleteUsers = async (orgId, userIds) => {
     if (!Array.isArray(userIds) || userIds.length === 0)
       throw new Error("Invalid or missing userIds array");
-  
+    const decrementMap = {};
     await pool.query("BEGIN");
   
     const deletedUsers = await pool.query(userQueries.DELETE_USERS, [userIds, orgId]);
@@ -759,7 +773,32 @@ const updateUserRole = async (userId, role) => {
     if (remainingUserIds.length > 0) {
       deletedOrgUsers = await pool.query(userQueries.DELETE_ORG_USERS, [remainingUserIds, orgId]);
     }
-  
+    const allDeletedUsers = [
+      ...(deletedUsers?.rows || []),
+      ...(deletedOrgUsers?.rows || [])
+    ];
+    for (const u of allDeletedUsers) {
+      if (!u?.org_id || !u?.role) continue;
+
+      const feature = ROLE_TO_FEATURE[u.role];
+      if (!feature) continue;
+
+      if (!orgWiseMap[u.org_id]) {
+        orgWiseMap[u.org_id] = {};
+      }
+
+      orgWiseMap[u.org_id][feature] =
+        (orgWiseMap[u.org_id][feature] || 0) - 1;
+    }
+     for (const [orgId, decrementMap] of Object.entries(orgWiseMap)) {
+    if(Object.entries(decrementMap).length > 0){
+      const licenseKey = await pool.query(userQueries.GET_LICENSE_KEY,[orgId]);
+      if(licenseKey.rows.length){ 
+      for(const [key,delta] of Object.entries(decrementMap)){
+        await pool.query(userQueries.UPDATE_CATALOGUES_PLAN,[key,delta,licenseKey.rows[0].id]);
+    }}
+    }}
+    
     await pool.query("COMMIT");
   
     return { deletedUserIds, deletedOrgUsers: deletedOrgUsers.rows.map((row) => row.id) };
@@ -769,7 +808,7 @@ const updateUserRole = async (userId, role) => {
     if (!Array.isArray(userIds) || userIds.length === 0) {
         throw new Error("Invalid or missing userIds array");
     }
-
+    const orgWiseMap = {};
     try {
         // Delete users from the main 'users' table
         const deletedUsers = await pool.query(userQueries.DELETE_RANDOM_USERS, [userIds]);
@@ -779,11 +818,36 @@ const updateUserRole = async (userId, role) => {
         const remainingUserIds = userIds.filter(id => !deletedUserIds.includes(id));
 
         let deletedOrgUsers = [];
+        let deletedOrgResponse;
         if (remainingUserIds.length > 0) {
-            const deletedOrgResponse = await pool.query(userQueries.DELETE_RANDOM_ORG_USERS, [remainingUserIds]);
+             deletedOrgResponse = await pool.query(userQueries.DELETE_RANDOM_ORG_USERS, [remainingUserIds]);
             deletedOrgUsers = deletedOrgResponse.rows.map(row => row.id);
         }
+        const allDeletedUsers = [
+        ...(deletedUsers?.rows || []),
+        ...(deletedOrgResponse?.rows || [])
+      ];
+    for (const u of allDeletedUsers) {
+      if (!u?.org_id || !u?.role) continue;
 
+      const feature = ROLE_TO_FEATURE[u.role];
+      if (!feature) continue;
+
+      if (!orgWiseMap[u.org_id]) {
+        orgWiseMap[u.org_id] = {};
+      }
+
+      orgWiseMap[u.org_id][feature] =
+        (orgWiseMap[u.org_id][feature] || 0) - 1;
+    }
+     for (const [orgId, decrementMap] of Object.entries(orgWiseMap)) {
+    if(Object.entries(decrementMap).length > 0){
+      const licenseKey = await pool.query(userQueries.GET_LICENSE_KEY,[orgId]);
+      if(licenseKey.rows.length){ 
+      for(const [key,delta] of Object.entries(decrementMap)){
+        await pool.query(userQueries.UPDATE_CATALOGUES_PLAN,[key,delta,licenseKey.rows[0].id]);
+    }}
+    }}
         return {
             deletedUserIds,
             deletedOrgUsers

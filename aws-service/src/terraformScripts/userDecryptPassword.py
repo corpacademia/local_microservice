@@ -14,7 +14,7 @@ DB_CONFIG = {
 }
 
 # Ensure correct private key path (Update if needed)
-KEY_PAIR_PATH = r"C:/Users/Administrator/Downloads/golabing_key.pem"
+KEY_PAIR_PATH = r"C:/Users/Administrator/Downloads/golab.pem"
 def extract_and_store_password(user_id, public_ip, instance_id):
     """Wait for 4 minutes, retry password extraction, and store it in the database."""
     print("Waiting for 4 minutes before retrieving password...")

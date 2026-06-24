@@ -16,6 +16,7 @@ module.exports = {
     updateUserStatusOnLogout:`UPDATE users SET status = 'inactive' WHERE email = $1 RETURNING *`,
     updateOrgUserStatusOnLogout:`UPDATE organization_users SET status = 'inactive' WHERE email = $1 RETURNING *`,
 
+    GET_LICENSE_KEY:`SELECT * FROM license_keys WHERE org_id=$1 AND status='active'`,
     GET_USER_NOTIFICATION_SETTINGS:`SELECT * FROM user_notification_settings WHERE user_id = $1`,
 
     getAllUsers: `SELECT * FROM users`,
@@ -32,7 +33,17 @@ module.exports = {
     getUserCertifications: 'SELECT CertificationName FROM Certifications WHERE UserId = $1',
     updateUserOrganizationOfOrg: 'UPDATE organization_users SET organization = $1, organization_type = $2,org_id=$3 WHERE id = $4 RETURNING *',
     updateUserOrganizationDetails: 'UPDATE users SET organization = $1, organization_type = $2, org_id=$3 WHERE id = $4 RETURNING *',
-    
+     UPDATE_CATALOGUES_PLAN: `
+        UPDATE license_keys
+        SET usage = jsonb_set(
+            usage,
+            ARRAY[$1],
+            to_jsonb(COALESCE((usage->>$1)::int, 0) + $2),
+            true
+        )
+        WHERE id = $3
+        RETURNING *;
+        `,
     //update the user profile
     updateUserProfile: `UPDATE users SET name = $1, email = $2, password = $3, phone = $4, location = $5 ,profilephoto = $6 WHERE id = $7 RETURNING *`,
     updateUserProfileWithNoPassword: `UPDATE users SET name = $1, email = $2, phone = $3, location = $4 ,profilephoto = $5 WHERE id = $6 RETURNING *`,
@@ -84,13 +95,13 @@ module.exports = {
     DELETE_USERS:`
           DELETE FROM users 
           WHERE id = ANY($1) AND org_id = $2
-          RETURNING id
+          RETURNING *
       `,
     DELETE_ORG_USERS:`
           DELETE FROM organization_users 
           WHERE id = ANY($1) AND org_id = $2
-          RETURNING id
+          RETURNING *
       `,
-    DELETE_RANDOM_USERS:`delete from users where id = any($1) returning id`,
-    DELETE_RANDOM_ORG_USERS:`delete from organization_users where id = any($1) returning id`,    
+    DELETE_RANDOM_USERS:`delete from users where id = any($1) returning *`,
+    DELETE_RANDOM_ORG_USERS:`delete from organization_users where id = any($1) returning *`,    
 }

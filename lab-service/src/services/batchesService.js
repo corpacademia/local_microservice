@@ -98,6 +98,25 @@ const getBatches = async(req,res)=>{
         if(role === 'superadmin'){
            getBatches = await pool.query(batchQueries.GET_BATCHES_SUPERADMIN);
         }
+        else if(role === 'trainer'){
+          const getBatchLabs = await pool.query(batchQueries.GET_BATCHES_FOR_TRAINER,[userIds]);
+          if(!getBatchLabs.rows.length){
+             return res.status(200).send({
+                success:true,
+                message:"Could not fetch the batches",
+                data:[]
+            })
+          }
+          const allBatches = []
+          const batchIds = [...new Set(
+        getBatchLabs.rows.map(lab => lab.batch_id)
+      )];
+
+      getBatches = batchIds.length
+        ? await pool.query(batchQueries.GET_BATCHES_TRAINER, [batchIds])
+        : { rows: [] };
+       }
+        
         else{
           getBatches = await pool.query(batchQueries.GET_BATCHES,[userIds]);
         }
@@ -199,7 +218,7 @@ const addUsersToBatch = async(req,res)=>{
                     })
                 }
                 let labDetails = getLab.rows[0];
-                if(labDetails?.quantity <= 0){
+                if(labDetails?.quantity !== -1 && labDetails?.quantity <= 0){
                   return res.status(400).send({
                     success:false,
                     message:"The number of users exceed quantity"
@@ -329,12 +348,19 @@ const addUsersToBatch = async(req,res)=>{
 
                 await pool.query(batchQueries.UPDATE_BATCH_USER_TLAB,[1,userId]);
                 await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batchId,labId]);
-                const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[1,labId,userDetails?.org_id]);
-                const updateData = purchaseResult.rows[0];
-                await cataloguePurchaseUpdate({
-                  orgId:userDetails?.org_id,
-                  data:updateData
-                })
+                if (labDetails.purchased) {
+                    const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[1,labId,userDetails?.org_id]);
+                    const updateData = purchaseResult.rows[0];
+                    await cataloguePurchaseUpdate({
+                      orgId:userDetails?.org_id,
+                      data:updateData
+                    })
+                } else {
+                    const decrementQuery = batchQueries.DECREMENT_LAB_REMAINING[labDetails.type];
+                    if (decrementQuery) {
+                        await pool.query(decrementQuery, [1, labId]);
+                    }
+                }
             }
 
         }
@@ -440,10 +466,19 @@ const addLabsToBatch = async (req, res) => {
       trainer_name,
       batch_id,
       assigned_by,
+      type
     ]);
 
     if (!addLab.rows.length) throw new Error("Could not add lab to batch");
-    
+
+    // Determine whether this is a purchased lab or an own lab.
+    // Own labs have no row in lab_batch_purchased → remaining is tracked in the lab table itself.
+    const purchaseRecord = await pool.query(
+      `SELECT purchased_id FROM lab_batch_purchased WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+      [lab_id, org_id]
+    );
+    const isPurchasedLab = purchaseRecord.rows.length > 0;
+
     //  Single unified loop for all types
     for (const user of users) {
       // Proxmox single-VM
@@ -570,14 +605,55 @@ const addLabsToBatch = async (req, res) => {
       else if (type === 'cloudslice'){
         await assignCloudsliceLab(lab_id, user.user_id, assigned_by, start_date, end_date,sessionToken,batch_id)
       }
+      // proxmox-cluster: create user assignment + per-user VM placeholder rows
+      else if (type === 'proxmox-cluster'){
+        const checkAlreadyAssigned = await pool.query(
+          `SELECT id FROM proxmoxcluster_user_assignment WHERE labid=$1 AND user_id=$2 LIMIT 1`,
+          [lab_id, user.user_id]
+        );
+        if(checkAlreadyAssigned.rows.length){ continue; }
+
+        const vmConfigsForCluster = await pool.query(
+          `SELECT * FROM proxmoxcluster_vm_configs WHERE lab_id=$1`, [lab_id]
+        );
+
+        const assignmentInsert = await pool.query(
+          `INSERT INTO proxmoxcluster_user_assignment
+            (labid,user_id,assigned_by,startdate,enddate,assignment_type,batch_id)
+           VALUES($1,$2,$3,$4,$5,'batch',$6) RETURNING *`,
+          [lab_id, user.user_id, assigned_by, start_date, end_date, batch_id]
+        );
+        const assignmentId = assignmentInsert.rows[0].id;
+
+        for(const vmCfg of vmConfigsForCluster.rows){
+          await pool.query(
+            `INSERT INTO proxmoxcluster_user_vms
+              (assignment_id,labid,user_id,vm_config_id,vm_label,proxmox_vmid,vmname,node,protocol,username,password)
+             VALUES($1,$2,$3,$4,$5,null,null,$6,$7,$8,$9)`,
+            [assignmentId, lab_id, user.user_id, vmCfg.id, vmCfg.vm_label,
+             vmCfg.node, vmCfg.protocol, vmCfg.username, vmCfg.password]
+          );
+        }
+      }
       await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB, [1, batch_id,user?.user_id]);
       await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batch_id,lab_id]);
-       const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[1,lab_id,org_id]);
+      if (isPurchasedLab) {
+               const purchaseResult = await pool.query(purchaseQueries.UPDATE_ASSIGNED_USERS,[1,lab_id,org_id]);
                 const updateData = purchaseResult.rows[0];
                 await cataloguePurchaseUpdate({
                   orgId:org_id,
                   data:updateData
                 })
+      }
+    }
+
+    // For own labs, decrement remaining in the lab table by total users assigned in this batch.
+    // isPurchasedLab=false means no row in lab_batch_purchased → use lab table's remaining column.
+    if (!isPurchasedLab && users.length > 0) {
+      const decrementQuery = batchQueries.DECREMENT_LAB_REMAINING[type];
+      if (decrementQuery) {
+        await pool.query(decrementQuery, [users.length, lab_id]);
+      }
     }
 
     // Update batch counters
@@ -636,6 +712,40 @@ const getBatchLabs = async(req,res)=>{
         })
     }
 }
+//get labs for trainers
+const getLabsForTrainers = async(req,res)=>{
+  try {
+    let  {trainerId} = req.params;
+    
+    if(!trainerId){
+      return res.status(400).send({
+        success:false,
+        message:"Please provide the required field"
+      })
+    }
+    const getBatchLabsForTrainers = await pool.query(batchQueries.GET_BATCHES_FOR_TRAINER,[[trainerId]]);
+    if(!getBatchLabsForTrainers.rows.length){
+      return res.status(200).send({
+        success:true,
+        message:"No labs assigned",
+        data:[]
+      })
+    }
+    return res.status(200).send({
+      success:true,
+      message:"Successfully accessed data",
+      data:getBatchLabsForTrainers.rows
+    })
+  } catch (error) {
+    console.log("Error:",error);
+    return res.status(500).send({
+      success:false,
+      message:"Internal server error",
+      error:error.message
+    })
+  }
+}
+
 //get labs for batches
 const getLabsForBatch = async (req,res)=>{
     try {
@@ -647,7 +757,21 @@ const getLabsForBatch = async (req,res)=>{
         })
     }
     const isBoolean = role === 'superadmin';
-    const getLabs = await pool.query(batchQueries.GET_ALL_LABS_FOR_BATCH,[userId,orgId,isBoolean]);
+    let users=[userId];
+    if(role === 'orgsuperadmin'){
+      const getUsers = await pool.query(`select id from users where org_id=$1 and role='labadmin' union all select id from organization_users where org_id=$1 and role = 'labadmin'`,[orgId]);
+      if(getUsers.rowCount > 0){
+        users = [userId,...getUsers.rows.map(user=>user.id)];
+      }
+    }
+    else if(role === 'labadmin'){
+       const getUsers = await pool.query(`select id from users where org_id=$1 and role='orgsuperadmin' union all select id from organization_users where org_id=$1 and role = 'orgsuperadmin'`,[orgId]);
+      if(getUsers.rowCount > 0){
+        users = [userId,...getUsers.rows.map(user=>user.id)];
+      }
+    }
+    console.log("Users:",users)
+    const getLabs = await pool.query(batchQueries.GET_ALL_LABS_FOR_BATCH,[users,orgId,isBoolean]);
     if(!getLabs.rows.length){
         return res.status(200).send({
             success:false,
@@ -670,6 +794,19 @@ const getLabsForBatch = async (req,res)=>{
     }
    
 }
+//update the lab count used
+// const updateLabCount = async(req,res)=>{
+//   try {
+    
+//   } catch (error) {
+//     console.log("Error:",error);
+//     return res.status(500).send({
+//       success:false,
+//       message:"Internal server error",
+//       error:error.message
+//     })
+//   }
+// }
 
 //update batch details
 const updateBatchDetails = async(req,res)=>{
@@ -890,7 +1027,7 @@ const deleteUserAndItsLabs = async (req, res) => {
        const vmRes = deleteProxmoxVM.rows[0];
        if(vmRes){
          await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
-            {node:vmRes?.node , vmid:vmRes?.vmid},
+            {node:vmRes?.node , vmid:vmRes?.vmid ,labId:labId},
             {  headers: { Cookie: `session_token=${sessionToken}` } }
         )
        }
@@ -1154,7 +1291,7 @@ const deleteBatch = async(req,res)=>{
        const vmRes = deleteProxmoxVM.rows[0];
        if(vmRes){
          await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
-            {node:vmRes?.node , vmid:vmRes?.vmid},
+            {node:vmRes?.node , vmid:vmRes?.vmid,labId:lab?.lab_id},
             {  headers: { Cookie: `session_token=${sessionToken}` } }
         )
        }
@@ -1270,7 +1407,7 @@ const deleteLabFromBatch = async(req,res)=>{
        const vmRes = deleteProxmoxVM.rows[0];
           if(vmRes){
             await axios.post(`${process.env.BACKEND_URL}/api/v1/lab_ms/deleteVMOFProxmox`,
-                {node:vmRes?.node , vmid:vmRes?.vmid},
+                {node:vmRes?.node , vmid:vmRes?.vmid , labId:labId},
                 {  headers: { Cookie: `session_token=${sessionToken}` } }
             )
           }
@@ -1349,5 +1486,6 @@ module.exports = {
     deleteUserAndItsLabs,
     deleteLabFromBatch,
     updateBatchLab,
-    updateUserBatchLabs 
+    updateUserBatchLabs,
+    getLabsForTrainers
 }

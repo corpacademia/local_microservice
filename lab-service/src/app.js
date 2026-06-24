@@ -30,7 +30,7 @@ tables;
 // app.use(sessionMiddleware);
 
 // Mount it before any bodyParser middleware
-app.use('/webhook', express.raw({ type: 'application/json' }), handleCashfreeWebhook);
+app.use('/webhook', express.raw({ type: 'application/json' }),handleCashfreeWebhook);
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 app.use(cors({

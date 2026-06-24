@@ -53,14 +53,14 @@ const signupController = async (req, res) => {
 //upload bulk users
 const uploadBulkUsers = async(req,res)=>{
   try {
-      const {users,organizationId,createdBy,orgName,orgType,role} = req.body;
+      const {users,organizationId,createdBy,orgName,orgType,role,license} = req.body;
       if(users.length ===0 || !createdBy ||!role){
           return res.status(400).send({
             success:false,
             message:"Please provide the required fields"
           })
       }
-      const addBulk = await userServices.bulkAddUser(users,organizationId,createdBy,orgName,orgType,role);
+      const addBulk = await userServices.bulkAddUser(users,organizationId,createdBy,orgName,orgType,role,license);
       if(!addBulk){
         return res.status(404).send({
           success:false,

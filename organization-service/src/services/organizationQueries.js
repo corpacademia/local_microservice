@@ -18,7 +18,7 @@ module.exports = {
     GET_ADMINS_COUNT: `
         SELECT COUNT(*) AS admin_count 
         FROM users 
-        WHERE org_id = $1 AND role = 'orgadmin'
+        WHERE org_id = $1 AND (role = 'orgsuperadmin' OR role = 'labadmin') 
     `,
     UPDATE_ORGANIZATION: `
         UPDATE organizations 

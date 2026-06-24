@@ -12,7 +12,12 @@ module.exports = {
     INSERT_CLOUDSLICE_USER_ASSIGNMENT:`INSERT INTO cloudsliceuserassignment(labid,user_id,assigned_by,start_date,end_date) VALUES($1,$2,$3,$4,$5) RETURNING *`,
     INSERT_INTO_QUIZ_EXERCISE_STATUS:`INSERT INTO cloudsliceuserquizexercisestatus(module_id,exercise_id,total_questions,correct,incorrect,score,status,user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
     INSERT_INTO_LAB_EXERCISE_STATUS_USER:`INSERT INTO cloudsliceuserlabexercisestatus (module_id,exercise_id,isrunning,status,completed_in,user_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-
+    
+    UPDATE_REMAINING_SEATS:`UPDATE lab_batch_purchased
+    SET assinged_users = GREATEST(COALESCE(assinged_users, 0) + $1, 0)
+    WHERE lab_id = $2
+    AND org_id = $3`,
+    UPDATE_LAB_REMAINING_SEATS:`UPDATE cloudslicelab SET remaining = GREATEST(COALESCE(remaining,0) + $1,0) WHERE labid=$1 `,
     UPDATE_INTO_QUIZ_EXERCISE_STATUS:`UPDATE  cloudsliceuserquizexercisestatus SET total_questions=$1,correct=$2,incorrect=$3,score=$4,status=$5 where module_id=$6 and exercise=$7 and user_id=$7 RETURNING *`,
     UPDATE_INTO_LAB_EXERCISE_STATUS_USER:`UPDATE  cloudsliceuserlabexercisestatus SET isrunning=$1,status=$2,completed_in=$3 where module_id=$4 and exercise_id=$5 and user_id=$6 RETURNING *`,
     UPDATE_DATES_PURCHASED_LABS:`UPDATE cloudslice_purchased_labs set start_date=NOW(),end_date=NOW()+ ($3 * INTERVAL '1 day'),status=$4,launched=$5 where labid=$1 and user_id=$2 RETURNING *`,

@@ -176,7 +176,7 @@ resource "aws_iam_instance_profile" "ssm_instance_profile_{lab_id}" {{
 resource "aws_instance" "aws_{lab_id}" {{
   ami           = "{ami_id}"
   instance_type = "{instance_type}"
-  key_name      = "golabing_key"
+  key_name      = "golab"
   vpc_security_group_ids = ["sg-0f4f7aca4400a8db8"]
  
   root_block_device {{
