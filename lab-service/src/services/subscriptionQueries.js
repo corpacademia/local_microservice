@@ -11,6 +11,7 @@ module.exports = {
   GET_LICENSE_KEY:`SELECT * FROM license_keys WHERE org_id=$1 AND status=$2 LIMIT 1`,
   GET_PAYMENT_DATA:`SELECT * FROM payments WHERE labid=$1 AND org_id=$2`,
 
+  UPDATE_ACTIVE_KEY:`UPDATE license_keys set plan_tier=$1,plan_name=$2,billing_cycle=$3,issued_at=NOW(),expires_at=($4 * INTERVAL '1 day'),features=$5,plan_id=$6,license_key=$7 WHERE org_id=$8 AND status='active' RETURNING *`,
   UPDATE_PLAN:`UPDATE plans SET tier=$1,stylekey=$2, name=$3, description=$4, monthly_price=$5, annual_monthly_price=$6,
     annual_discount=$7, trial_days=$8, is_popular=$9, is_active=$10, features= $11 WHERE id=$12 RETURNING *
   `,

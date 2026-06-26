@@ -3,6 +3,7 @@ const pool = require('../db/dbConfig');
 const { getUserData } = require('./emailNotificationService');
 const path = require('path');
 const { sendNotificationToMail } = require('./notificationServices');
+const { create } = require('../config/proxmoxApi');
 
 const createPlan = async(req,res)=>{
     try {
@@ -298,7 +299,15 @@ const generateAndMailKey = async(req,res)=>{
         const isAnnual = billingCycle === "annual" || billingCycle === "true";
        const plan = await pool.query(queries.GET_PLAN,[planId]);
        const usage = generateUsageFromFeatures(plan?.rows[0].features);
-        const createKey = await pool.query(queries.CREATE_LICENSE_KEY,[key,orgId,organization,plan?.rows[0].tier,plan?.rows[0].name,isAnnual ? "annual" : "monthly",'active',isAnnual ? "365" : "30",plan?.rows[0].features,usage,planId]);
+       const checkActiveSubscription = await pool.query(queries.GET_LICENSE_KEY,[orgId,'active']);
+
+        let createKey;
+        if(checkActiveSubscription.rows.length){
+            createkey = await pool.query(queries.UPDATE_ACTIVE_KEY,[plan?.rows[0].tier,plan?.rows[0].name,isAnnual ? "annual" : "monthly", isAnnual ? "365" : "30", plan?.rows[0].features,planId,key])
+        }
+        else{
+        createKey = await pool.query(queries.CREATE_LICENSE_KEY,[key,orgId,organization,plan?.rows[0].tier,plan?.rows[0].name,isAnnual ? "annual" : "monthly",'active',isAnnual ? "365" : "30",plan?.rows[0].features,usage,planId]);
+        }
         if(!createKey.rows.length){
             throw new Error("Could not create the plan") 
         }

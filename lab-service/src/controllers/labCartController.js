@@ -1370,7 +1370,7 @@ const handleCashfreeWebhook = async (req, res) => {
       await createTheExtensionRequest(paymentData);
     }
     else if(type === "PLAN_PURCHASE"){
-      await subscriptionPurchase(paymentData)
+      await subscriptionPurchase(paymentData);
     }
     else if(type === "TEMPLATE_CREATION"){
         if(labType === 'cloudslice-template' ){

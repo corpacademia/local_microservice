@@ -6,6 +6,7 @@ const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 const {initSocket} = require('./socket')
 
 dotenv.config();
@@ -13,6 +14,41 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 initSocket(server);
+
+// Guacamole WebSocket proxy: browser /rdp?token=... -> lab-service:3002 /rdp
+// Mounted before body parsers / auth so the upgrade is forwarded cleanly.
+// Token in querystring is validated by lab-service via tokenStore (one-time use).
+const rdpProxy = createProxyMiddleware({
+  target: process.env.LAB_SERVICE_URL || 'http://localhost:3002',
+  changeOrigin: true,
+  ws: true,
+  logLevel: 'warn',
+});
+app.use('/rdp', rdpProxy);
+server.on('upgrade', (req, socket, head) => {
+  if (req.url && req.url.startsWith('/rdp')) {
+    rdpProxy.upgrade(req, socket, head);
+  }
+});
+
+// Webhook proxies — Stripe + Cashfree both verify HMAC over the raw request
+// body, so we MUST mount these before any JSON body parser (which would
+// consume + reformat the bytes and break signature verification).
+const webhookProxy = createProxyMiddleware({
+  target: process.env.LAB_SERVICE_URL || 'http://localhost:3002',
+  changeOrigin: true,
+  pathRewrite: { '^/api/v1/lab_ms': '' },
+  onProxyRes: (proxyRes, req, res) => {
+    res.header('Access-Control-Allow-Origin', process.env.CORS || 'http://localhost:5173');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  },
+  onError: (err, req, res) => {
+    res.status(500).json({ error: 'Webhook proxy error', details: err.message });
+  },
+});
+app.use('/api/v1/lab_ms/webhook', webhookProxy);
+app.use('/api/v1/lab_ms/cashfree-webhook', webhookProxy);
+
 // Middleware
 app.use(morgan("dev"));  // Log requests
 

@@ -181,7 +181,7 @@ const subscriptionPurchase = async(session)=>{
       planId,
       "plan",
      orgId || null,
-    ]);
+      ]);
     if (!insertData.rowCount) {
       throw new Error("Could not add the extension request");
     }
