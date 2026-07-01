@@ -243,7 +243,8 @@ SELECT
   cl.lab_id,
   cl.title,
   cl.user_id,
-
+  lbp.admin_id,
+  
   CASE
     WHEN COALESCE(lb.purchased, false) = true
     THEN lb.status
@@ -280,7 +281,7 @@ SELECT
   csl.labid AS lab_id,
   csl.title,
   csl.createdby AS user_id,
-
+   lbp.admin_id,
   CASE
     WHEN COALESCE(csoa.purchased, false) = true
     THEN csoa.status
@@ -317,7 +318,7 @@ SELECT
   sp.labid AS lab_id,
   sp.title,
   sp.user_id,
-
+ lbp.admin_id,
   CASE
     WHEN COALESCE(spoa.purchased, false) = true
     THEN spoa.status
@@ -354,7 +355,7 @@ SELECT
   sd.lab_id,
   sd.title,
   sd.user_id,
-
+ lbp.admin_id,
   CASE
     WHEN COALESCE(sdoa.purchased, false) = true
     THEN sdoa.status
@@ -391,7 +392,7 @@ SELECT
   vc.labid AS lab_id,
   vc.title,
   vc.user_id,
-
+ lbp.admin_id,
   CASE
     WHEN COALESCE(vcoa.purchased, false) = true
     THEN vcoa.status
@@ -428,7 +429,7 @@ SELECT
   pl.labid AS lab_id,
   pl.title,
   pl.user_id,
-
+ lbp.admin_id,
   CASE
     WHEN COALESCE(poa.purchased, false) = true
     THEN poa.status

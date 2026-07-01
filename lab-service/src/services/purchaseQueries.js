@@ -19,6 +19,7 @@ module.exports = {
     GET_USER_PURCHASED_SINGLEVM_DATACENTER_LABS:`SELECT * FROM singlevmdatacenter_purchased WHERE labid=$1`,
     GET_PURCHASED_LAB_QUANTITY:`SELECT *,(number_of_users - assigned_users) AS quantity FROM lab_batch_purchased  WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
    
+    CHECK_ACTIVE_PLAN:`SELECT * FROM license_keys WHERE org_id=$1 and status='active'`,
     CHECK_AVAILABILITY_CREDENTIALS:` SELECT id 
         FROM user_credential_groups 
         WHERE userassigned IS NULL 
@@ -36,7 +37,9 @@ module.exports = {
     UPDATE_EXPIRY_LAB_SINGLEVMDATACENTER:`UPDATE singlevmdatacenterorgassignment  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
     UPDATE_EXPIRY_LAB_VMCLUSTERDATACENTER:`UPDATE vmclusterdatacenterorgassignment  SET enddate = enddate + ($1 || 'days')::interval WHERE purchased_id=$2`,
     UPDATE_EXTENSION_APPORREJ:`UPDATE lab_extension_requests SET status=$1,admin_note=$2 WHERE request_id=$3 RETURNING *`,
-   
+    UPDATE_ACTIVE_KEY:`UPDATE license_keys set plan_tier=$1,plan_name=$2,billing_cycle=$3,features=$4,plan_id=$5,license_key=$6,activated=false WHERE org_id=$7 AND status='active' RETURNING *`,
+ 
+
     CHECK_SINGLEVMDATACENTER_LAB_AVAILABILITY:` SELECT id
         FROM datacenter_lab_user_credentials
         WHERE labid = $1 AND orgassigned  is NULL and assigned_to is  NUll

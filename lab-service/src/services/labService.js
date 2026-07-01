@@ -236,6 +236,114 @@ const getAllUserPurchasedLabs = async(userId)=>{
     }
 }
 
+//get user dashboard labs with titles and purchased_at for activity chart
+const getUserDashboardLabs = async(userId)=>{
+    const subQueries = [
+        {
+            label: 'labassignments',
+            sql: `SELECT la.lab_id AS labid, la.user_id, la.start_date, la.completion_date AS end_date,
+                  COALESCE(la.status,'assigned') AS status, NULL::text AS duration, la.start_date AS purchased_at,
+                  COALESCE(cl.cataloguename, cl.title, 'Lab') AS title, 'singlevm-aws' AS type
+                  FROM labassignments la LEFT JOIN createlab cl ON cl.lab_id = la.lab_id WHERE la.user_id=$1`
+        },
+        {
+            label: 'singlevmdatacenteruserassignment',
+            sql: `SELECT a.labid, a.user_id, a.startdate AS start_date, a.enddate AS end_date,
+                  COALESCE(a.status,'assigned') AS status, NULL::text AS duration, a.startdate AS purchased_at,
+                  COALESCE(dl.cataloguename, dl.title, 'Lab') AS title, 'singlevmdatacenter' AS type
+                  FROM singlevmdatacenteruserassignment a LEFT JOIN singlevmdatacenter_lab dl ON dl.lab_id=a.labid WHERE a.user_id=$1`
+        },
+        {
+            label: 'singlevmdatacenter_purchased',
+            sql: `SELECT p.labid, p.user_id, p.startdate AS start_date, p.enddate AS end_date,
+                  COALESCE(p.status,'assigned') AS status, NULL::text AS duration, p.startdate AS purchased_at,
+                  COALESCE(dl.cataloguename, dl.title, 'Lab') AS title, 'singlevmdatacenter' AS type
+                  FROM singlevmdatacenter_purchased p LEFT JOIN singlevmdatacenter_lab dl ON dl.lab_id=p.labid WHERE p.user_id=$1`
+        },
+        {
+            label: 'vmclusterdatacenteruserassignment',
+            sql: `SELECT a.labid, a.user_id, a.startdate AS start_date, a.enddate AS end_date,
+                  COALESCE(a.status,'assigned') AS status, NULL::text AS duration, a.startdate AS purchased_at,
+                  COALESCE(vl.cataloguename, vl.title, 'Lab') AS title, 'vmclusterdatacenter' AS type
+                  FROM vmclusterdatacenteruserassignment a LEFT JOIN vmclusterdatacenter_lab vl ON vl.labid=a.labid WHERE a.user_id=$1`
+        },
+        {
+            label: 'vmclusterdatacenter_purchased',
+            sql: `SELECT p.labid, p.user_id, p.startdate AS start_date, p.enddate AS end_date,
+                  COALESCE(p.status,'assigned') AS status, NULL::text AS duration, p.startdate AS purchased_at,
+                  COALESCE(vl.cataloguename, vl.title, 'Lab') AS title, 'vmclusterdatacenter' AS type
+                  FROM vmclusterdatacenter_purchased p LEFT JOIN vmclusterdatacenter_lab vl ON vl.labid=p.labid WHERE p.user_id=$1`
+        },
+        {
+            label: 'cloudsliceuserassignment',
+            sql: `SELECT a.labid, a.user_id, a.start_date, a.end_date,
+                  COALESCE(a.status,'assigned') AS status, NULL::text AS duration, a.start_date AS purchased_at,
+                  COALESCE(csl.cataloguename,'Lab') AS title, 'cloudslice' AS type
+                  FROM cloudsliceuserassignment a LEFT JOIN cloudslicelab csl ON csl.labid=a.labid WHERE a.user_id=$1`
+        },
+        {
+            label: 'cloudslice_purchased_labs',
+            sql: `SELECT p.labid, p.user_id, p.start_date, p.end_date, p.status, p.duration, p.start_date AS purchased_at,
+                  COALESCE(csl.cataloguename,'Lab') AS title, 'cloudslice' AS type
+                  FROM cloudslice_purchased_labs p LEFT JOIN cloudslicelab csl ON csl.labid=p.labid WHERE p.user_id=$1`
+        },
+        {
+            label: 'singlevmproxmoxuserassignment',
+            sql: `SELECT a.labid, a.user_id, a.startdate AS start_date, a.enddate AS end_date,
+                  COALESCE(a.status,'assigned') AS status, NULL::text AS duration, a.startdate AS purchased_at,
+                  COALESCE(pvl.cataloguename,'Lab') AS title, 'singlevm-proxmox' AS type
+                  FROM singlevmproxmoxuserassignment a LEFT JOIN singlevmproxmox_lab pvl ON pvl.labid=a.labid WHERE a.user_id=$1`
+        },
+        {
+            label: 'singlevmproxmox_purchased_labs',
+            sql: `SELECT p.labid, p.user_id, p.startdate AS start_date, p.enddate AS end_date,
+                  p.status, p.duration::text, p.startdate AS purchased_at,
+                  COALESCE(pvl.cataloguename,'Lab') AS title, 'singlevm-proxmox' AS type
+                  FROM singlevmproxmox_purchased_labs p LEFT JOIN singlevmproxmox_lab pvl ON pvl.labid=p.labid WHERE p.user_id=$1`
+        },
+        {
+            label: 'singlevm_aws_purchased_labs',
+            sql: `SELECT p.labid, p.user_id, p.start_date, p.completions_date AS end_date,
+                  p.status, p.duration, p.start_date AS purchased_at,
+                  COALESCE(cl.cataloguename, cl.title,'Lab') AS title, 'singlevm-aws' AS type
+                  FROM singlevm_aws_purchased_labs p LEFT JOIN createlab cl ON cl.lab_id=p.labid WHERE p.user_id=$1`
+        },
+        {
+            label: 'proxmoxcluster_user_assignment',
+            sql: `SELECT a.labid, a.user_id, a.startdate AS start_date, a.enddate AS end_date,
+                  COALESCE(a.status,'assigned') AS status, NULL::text AS duration, a.startdate AS purchased_at,
+                  COALESCE(pl.cataloguename, pl.title, 'Lab') AS title, 'proxmox-cluster' AS type
+                  FROM proxmoxcluster_user_assignment a LEFT JOIN proxmoxcluster_lab pl ON pl.labid=a.labid WHERE a.user_id=$1`
+        },
+        {
+            label: 'proxmox_cluster_purchased',
+            sql: `SELECT p.labid, p.user_id, p.startdate AS start_date, p.enddate AS end_date,
+                  COALESCE(p.status,'not-started') AS status, p.duration::text AS duration, p.purchased_at,
+                  COALESCE(pl.cataloguename, pl.title, 'Lab') AS title, 'proxmox-cluster' AS type
+                  FROM proxmox_cluster_purchased p LEFT JOIN proxmoxcluster_lab pl ON pl.labid=p.labid WHERE p.user_id=$1`
+        },
+    ];
+
+    const allRows = [];
+    for (const q of subQueries) {
+        try {
+            const result = await pool.query(q.sql, [userId]);
+            allRows.push(...(result.rows || []));
+        } catch (err) {
+            console.warn(`getUserDashboardLabs: skipping ${q.label} — ${err.message}`);
+        }
+    }
+
+    // Deduplicate by labid (first occurrence wins)
+    const seen = new Set();
+    return allRows.filter(row => {
+        const key = row.labid;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
 //get user purchased labs
 const getUserPurchasedSinglvmLabs = async(userId)=>{
     try {
@@ -1416,6 +1524,7 @@ module.exports = {
     updateSingleVMAwsLab,
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
+    getUserDashboardLabs,
     getAllOrganizationAssignedLabs,
     getAllLabs,
     updateUserLabCompletedStatus,

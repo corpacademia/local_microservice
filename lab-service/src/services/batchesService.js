@@ -100,18 +100,20 @@ const getBatches = async(req,res)=>{
         }
         else if(role === 'trainer'){
           const getBatchLabs = await pool.query(batchQueries.GET_BATCHES_FOR_TRAINER,[userIds]);
-          if(!getBatchLabs.rows.length){
-             return res.status(200).send({
-                success:true,
-                message:"Could not fetch the batches",
-                data:[]
-            })
-          }
-          const allBatches = []
-          const batchIds = [...new Set(
+        
+          let allBatches = []
+          let batchIds = [];
+          if(getBatchLabs.rows.length){
+            batchIds = [...new Set(
         getBatchLabs.rows.map(lab => lab.batch_id)
-      )];
-
+        )];
+          }
+           
+      const getTrainerBatches = await pool.query(batchQueries.GET_BATCHES,[userIds]);
+      if(getTrainerBatches.rows.length){
+        batchIds = [...batchIds,...getTrainerBatches.rows.map(batch=>batch.id)]
+      }
+      
       getBatches = batchIds.length
         ? await pool.query(batchQueries.GET_BATCHES_TRAINER, [batchIds])
         : { rows: [] };
@@ -345,6 +347,36 @@ const addUsersToBatch = async(req,res)=>{
                 })
               }
                }
+               else if (labDetails.type === 'proxmox-cluster'){
+        const checkAlreadyAssigned = await pool.query(
+          `SELECT id FROM proxmoxcluster_user_assignment WHERE labid=$1 AND user_id=$2 LIMIT 1`,
+          [labId, userId]
+        );
+        if(checkAlreadyAssigned.rows.length){ continue; }
+
+        const vmConfigsForCluster = await pool.query(
+          `SELECT * FROM proxmoxcluster_vm_configs WHERE lab_id=$1`, [labId]
+        );
+
+        const assignmentInsert = await pool.query(
+          `INSERT INTO proxmoxcluster_user_assignment
+            (labid,user_id,assigned_by,startdate,enddate,assignment_type,batch_id)
+           VALUES($1,$2,$3,$4,$5,'batch',$6) RETURNING *`,
+          [labId, userId, assignedBy, getLabDetails.start_date,
+          getLabDetails.end_date, batchId]
+        );
+        const assignmentId = assignmentInsert.rows[0].id;
+
+        for(const vmCfg of vmConfigsForCluster.rows){
+          await pool.query(
+            `INSERT INTO proxmoxcluster_user_vms
+              (assignment_id,labid,user_id,vm_config_id,vm_label,proxmox_vmid,vmname,node,protocol,username,password)
+             VALUES($1,$2,$3,$4,$5,null,null,$6,$7,$8,$9)`,
+            [assignmentId, labId, userId, vmCfg.id, vmCfg.vm_label,
+             vmCfg.node, vmCfg.protocol, vmCfg.username, vmCfg.password]
+          );
+        }
+      }
 
                 await pool.query(batchQueries.UPDATE_BATCH_USER_TLAB,[1,userId]);
                 await pool.query(batchQueries.UPDATE_BATCH_USERS_TLAB_STARTED,[1,batchId,labId]);
@@ -716,7 +748,7 @@ const getBatchLabs = async(req,res)=>{
 const getLabsForTrainers = async(req,res)=>{
   try {
     let  {trainerId} = req.params;
-    
+
     if(!trainerId){
       return res.status(400).send({
         success:false,
@@ -724,17 +756,25 @@ const getLabsForTrainers = async(req,res)=>{
       })
     }
     const getBatchLabsForTrainers = await pool.query(batchQueries.GET_BATCHES_FOR_TRAINER,[[trainerId]]);
-    if(!getBatchLabsForTrainers.rows.length){
-      return res.status(200).send({
-        success:true,
-        message:"No labs assigned",
-        data:[]
-      })
-    }
+    const getPurchasedLabs = await pool.query(
+      `SELECT lab_id, type FROM lab_batch_purchased WHERE admin_id=$1 AND status='active'`,
+      [trainerId]
+    );
+
+    const batchLabs = getBatchLabsForTrainers.rows;
+    const purchasedLabs = getPurchasedLabs.rows;
+
+    // merge, skip duplicates already present from batch assignment
+    const seen = new Set(batchLabs.map(l => l.lab_id));
+    const combined = [
+      ...batchLabs,
+      ...purchasedLabs.filter(l => !seen.has(l.lab_id))
+    ];
+
     return res.status(200).send({
       success:true,
       message:"Successfully accessed data",
-      data:getBatchLabsForTrainers.rows
+      data:combined
     })
   } catch (error) {
     console.log("Error:",error);
@@ -758,6 +798,7 @@ const getLabsForBatch = async (req,res)=>{
     }
     const isBoolean = role === 'superadmin';
     let users=[userId];
+    
     if(role === 'orgsuperadmin'){
       const getUsers = await pool.query(`select id from users where org_id=$1 and role='labadmin' union all select id from organization_users where org_id=$1 and role = 'labadmin'`,[orgId]);
       if(getUsers.rowCount > 0){
@@ -770,7 +811,6 @@ const getLabsForBatch = async (req,res)=>{
         users = [userId,...getUsers.rows.map(user=>user.id)];
       }
     }
-    console.log("Users:",users)
     const getLabs = await pool.query(batchQueries.GET_ALL_LABS_FOR_BATCH,[users,orgId,isBoolean]);
     if(!getLabs.rows.length){
         return res.status(200).send({

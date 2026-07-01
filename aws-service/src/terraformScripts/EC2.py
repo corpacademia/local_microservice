@@ -177,7 +177,7 @@ resource "aws_instance" "aws_{lab_id}" {{
   ami           = "{ami_id}"
   instance_type = "{instance_type}"
   key_name      = "golab"
-  vpc_security_group_ids = ["sg-0f4f7aca4400a8db8"]
+  vpc_security_group_ids = ["sg-0b0690a867043e171"]
  
   root_block_device {{
     volume_size = {storage_size}

@@ -487,6 +487,25 @@ const getAllUserPurchasedLabs = async (req, res) => {
     }
 }
 
+//get user dashboard labs with titles — used by user-role overview page
+const getUserDashboardLabs = async (req, res) => {
+    try {
+        const { userId } = req.body;
+        if (!userId) {
+            return res.status(400).send({ success: false, message: 'Please provide userId' });
+        }
+        const result = await labService.getUserDashboardLabs(userId);
+        return res.status(200).send({
+            success: true,
+            message: 'Successfully retrieved user dashboard labs',
+            data: result || [],
+        });
+    } catch (error) {
+        console.error('Error in getUserDashboardLabs:', error);
+        return res.status(500).send({ success: false, message: 'Error fetching dashboard labs', error: error.message });
+    }
+}
+
 //get user purchased single vm labs on labid
 const getUserPurchasedSinglvmLabsOnLabId = async (req, res) => {
     try {
@@ -1910,6 +1929,7 @@ module.exports = {
     updateSingleVMAwsLab,
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
+    getUserDashboardLabs,
     getAllOrganizationAssignedLabs,
     getAllLabs,
     getLabsOfLabadmins,

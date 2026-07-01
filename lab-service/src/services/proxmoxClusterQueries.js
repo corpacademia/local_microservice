@@ -192,7 +192,7 @@ RETURNING *`,
     GET_USER_VMS_BY_ASSIGNMENT_WITH_CONFIG:
         `SELECT puv.*,
                 pvc.cpu, pvc.ram, pvc.storage, pvc.storagetype,
-                pvc.networkbridge, pvc.nicmodel, pvc.template_id,pvc.labid
+                pvc.networkbridge, pvc.nicmodel, pvc.template_id,pvc.lab_id
          FROM proxmoxcluster_user_vms puv
          LEFT JOIN proxmoxcluster_vm_configs pvc ON puv.vm_config_id = pvc.id
          WHERE puv.assignment_id = $1 ORDER BY puv.created_at ASC`,

@@ -485,6 +485,8 @@ const extensionCashfreeCheckout = async (req, res) => {
 const subscriptionCheckout = async(req,res)=>{
   try {
     const {data}  = req.body;
+    // console.log(data)
+    // return;
     const { key,
         planName,
         planTier,
@@ -496,7 +498,9 @@ const subscriptionCheckout = async(req,res)=>{
         usage,
         user,
         planId,
-        total} = data
+        total,
+        remainingDays
+      } = data
         orderId = `plan_${Date.now()}`
     const planPayload = {
        order_id : orderId,
@@ -526,7 +530,7 @@ const subscriptionCheckout = async(req,res)=>{
       orgId:String(user?.org_id),
       organization:String(user?.organization),  
       total: String(total),
-
+      remainingDays:String(remainingDays || "" ),
       checkout_type: "PLAN_PURCHASE"
     }
     }
@@ -686,7 +690,7 @@ const cashfreeCheckout = async (req, res) => {
 
       order_meta: {
         return_url: `${process.env.FRONTEND_URL}/dashboard/${
-          org ? "my-purchases" : "my-labs"
+         (org && user?.role === 'trainer') ? "labs" : org ? "my-purchases" : "my-labs"
         }`,
       },
     order_tags: {
@@ -980,7 +984,8 @@ const insertPaymentAndAssignLab = async (paymentData) => {
   const userId = meta.user_id;
   const cartId = meta.cart_id;
   const org = meta.org === "true";
-  console.log("paymentData:",paymentData)
+
+
   if (!userId || !cartId) {
     console.error("Missing metadata in payment:", meta);
     return;

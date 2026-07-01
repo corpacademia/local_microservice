@@ -59,6 +59,7 @@ const { createLab,
     updateSingleVMAwsLab,
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
+    getUserDashboardLabs,
     getAllOrganizationAssignedLabs,
     updateUserLabCompletedStatus,
     getUserPurchasedSingleVMDatacenterLabs,
@@ -202,6 +203,7 @@ router.post('/setNotificationSettings/:userId',setUserNotificationSettings);
 router.get('/notifications/preferences/:userId',getUserNotificationSettings);
 router.post('/enroll',insertFreeLab);
 router.post('/getAllUserPurchasedLabs',getAllUserPurchasedLabs);
+router.post('/getUserDashboardLabs',getUserDashboardLabs);
 router.get('/getOrgAssignedLabs/:orgId',getAllOrganizationAssignedLabs);
 router.get('/getAllLabs',getAllLabs);
 router.post('/updateUserLabCompletedStatus',updateUserLabCompletedStatus)

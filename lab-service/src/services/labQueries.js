@@ -336,7 +336,7 @@ module.exports = {
             COALESCE(pl.number_hours_day, 1)::INTEGER AS number_hours_day,
             pl.user_id,
             COALESCE(pl.catalogue_price::TEXT, '0') AS price,
-            0::INTEGER AS total_enrollments,
+            pl.total_enrollments,
             pl.created_at,
             'proxmox-cluster' AS type,
             'available' AS software,
@@ -554,7 +554,7 @@ module.exports = {
 
     GET_ALL_LABS_BY_ORG: `
     -- createlab
-    SELECT 
+    SELECT
         cl.lab_id as id,
         cl.cataloguename AS title,
         cl.description,
@@ -569,25 +569,26 @@ module.exports = {
           WHEN cl.enddate > NOW() THEN 'available'
           ELSE 'not available'
         END AS software,
-        CASE 
-          WHEN cl.price::Float <= 0 THEN true 
-          ELSE false 
+        CASE
+          WHEN cl.price::Float <= 0 THEN true
+          ELSE false
         END AS isFree,
         COALESCE(u.organization, ou.organization) AS provider,
-        COALESCE(AVG(r.rating), 0) AS avg_rating
+        COALESCE(AVG(r.rating), 0) AS avg_rating,
+        cl.created_at
     FROM createlab cl
     LEFT JOIN users u ON cl.user_id = u.id
     LEFT JOIN organization_users ou ON cl.user_id = ou.id
-    LEFT JOIN reviews r ON cl.lab_id = r.lab_id 
+    LEFT JOIN reviews r ON cl.lab_id = r.lab_id
       AND COALESCE(u.org_id, ou.org_id) = $1
     GROUP BY cl.lab_id, cl.cataloguename, cl.description, cl.level, cl.category,
-            cl.number_days, cl.user_id, cl.price, cl.enddate,
+            cl.number_days, cl.user_id, cl.price, cl.enddate, cl.created_at,
             u.organization, ou.organization, u.org_id, ou.org_id
 
     UNION ALL
 
     -- singlevmdatacenter_lab
-    SELECT 
+    SELECT
         s.lab_id AS id,
         s.cataloguename AS title,
         s.description,
@@ -599,25 +600,26 @@ module.exports = {
         s.total_enrollments,
         'singlevmdatacenter' AS type,
         'available' AS software,
-        CASE 
-          WHEN s.price::Float <= 0 THEN true 
-          ELSE false 
+        CASE
+          WHEN s.price::Float <= 0 THEN true
+          ELSE false
         END AS isFree,
         COALESCE(u.organization, ou.organization) AS provider,
-        COALESCE(AVG(r.rating), 0) AS avg_rating
+        COALESCE(AVG(r.rating), 0) AS avg_rating,
+        s.created_at
     FROM singlevmdatacenter_lab s
     LEFT JOIN users u ON s.user_id = u.id
     LEFT JOIN organization_users ou ON s.user_id = ou.id
-    LEFT JOIN reviews r ON s.lab_id = r.lab_id 
+    LEFT JOIN reviews r ON s.lab_id = r.lab_id
       AND COALESCE(u.org_id, ou.org_id) = $1
     GROUP BY s.lab_id, s.cataloguename, s.description, s.level, s.category,
-            s.startdate, s.enddate, s.user_id, s.price,
+            s.startdate, s.enddate, s.user_id, s.price, s.created_at,
             u.organization, ou.organization, u.org_id, ou.org_id
 
     UNION ALL
 
     -- vmclusterdatacenter_lab
-    SELECT 
+    SELECT
         v.labid AS id,
         v.cataloguename AS title,
         v.description,
@@ -629,25 +631,26 @@ module.exports = {
         v.total_enrollments,
         'vmclusterdatacenter' AS type,
         'available' AS software,
-        CASE 
-          WHEN v.price::Float <= 0 THEN true 
-          ELSE false 
+        CASE
+          WHEN v.price::Float <= 0 THEN true
+          ELSE false
         END AS isFree,
         COALESCE(u.organization, ou.organization) AS provider,
-        COALESCE(AVG(r.rating), 0) AS avg_rating
+        COALESCE(AVG(r.rating), 0) AS avg_rating,
+        v.created_at
     FROM vmclusterdatacenter_lab v
     LEFT JOIN users u ON v.user_id = u.id
     LEFT JOIN organization_users ou ON v.user_id = ou.id
-    LEFT JOIN reviews r ON v.labid = r.lab_id 
+    LEFT JOIN reviews r ON v.labid = r.lab_id
       AND COALESCE(u.org_id, ou.org_id) = $1
     GROUP BY v.labid, v.cataloguename, v.description, v.level, v.category,
-            v.startdate, v.enddate, v.user_id, v.price,
+            v.startdate, v.enddate, v.user_id, v.price, v.created_at,
             u.organization, ou.organization, u.org_id, ou.org_id
 
     UNION ALL
 
     -- singlevm-proxmox
-    SELECT 
+    SELECT
         v.labid AS id,
         v.cataloguename AS title,
         v.description,
@@ -659,25 +662,26 @@ module.exports = {
         v.total_enrollments,
         'singlevm-proxmox' AS type,
         'available' AS software,
-        CASE 
-          WHEN v.price::Float <= 0 THEN true 
-          ELSE false 
+        CASE
+          WHEN v.price::Float <= 0 THEN true
+          ELSE false
         END AS isFree,
         COALESCE(u.organization, ou.organization) AS provider,
-        COALESCE(AVG(r.rating), 0) AS avg_rating
+        COALESCE(AVG(r.rating), 0) AS avg_rating,
+        v.created_at
     FROM singlevmproxmox_lab v
     LEFT JOIN users u ON v.user_id = u.id
     LEFT JOIN organization_users ou ON v.user_id = ou.id
-    LEFT JOIN reviews r ON v.labid = r.lab_id 
+    LEFT JOIN reviews r ON v.labid = r.lab_id
       AND COALESCE(u.org_id, ou.org_id) = $1
     GROUP BY v.labid, v.cataloguename, v.description, v.level, v.category,
-            v.startdate, v.enddate, v.user_id, v.price,
+            v.startdate, v.enddate, v.user_id, v.price, v.created_at,
             u.organization, ou.organization, u.org_id, ou.org_id
 
     UNION ALL
 
     -- cloudslicelab
-    SELECT 
+    SELECT
         c.labid AS id,
         c.cataloguename AS title,
         c.description,
@@ -689,19 +693,52 @@ module.exports = {
         c.total_enrollments,
         'cloudslice' AS type,
         'available' AS software,
-        CASE 
-          WHEN c.price::Float <= 0 THEN true 
-          ELSE false 
+        CASE
+          WHEN c.price::Float <= 0 THEN true
+          ELSE false
         END AS isFree,
         COALESCE(u.organization, ou.organization) AS provider,
-        COALESCE(AVG(r.rating), 0) AS avg_rating
+        COALESCE(AVG(r.rating), 0) AS avg_rating,
+        c.created_at
     FROM cloudslicelab c
     LEFT JOIN users u ON c.createdby = u.id
     LEFT JOIN organization_users ou ON c.createdby = ou.id
     LEFT JOIN reviews r ON c.labid = r.lab_id
       AND COALESCE(u.org_id, ou.org_id) = $1
     GROUP BY c.labid, c.cataloguename, c.description, c.level, c.category,
-            c.startdate, c.enddate, c.createdby, c.price,
+            c.startdate, c.enddate, c.createdby, c.price, c.created_at,
+            u.organization, ou.organization, u.org_id, ou.org_id
+
+    UNION ALL
+
+    -- proxmoxcluster_lab
+    SELECT
+        pl.labid AS id,
+        COALESCE(pl.cataloguename, pl.title) AS title,
+        pl.description,
+        pl.catalogue_level AS level,
+        pl.catalogue_category AS category,
+        DATE_PART('day', pl.enddate - pl.startdate) AS duration,
+        pl.user_id,
+        pl.catalogue_price AS price,
+        NULL::INTEGER AS total_enrollments,
+        'proxmox-cluster' AS type,
+        'available' AS software,
+        CASE
+          WHEN COALESCE(pl.catalogue_price, 0) <= 0 THEN true
+          ELSE false
+        END AS isFree,
+        COALESCE(u.organization, ou.organization) AS provider,
+        COALESCE(AVG(r.rating), 0) AS avg_rating,
+        pl.created_at
+    FROM proxmoxcluster_lab pl
+    LEFT JOIN users u ON pl.user_id = u.id
+    LEFT JOIN organization_users ou ON pl.user_id = ou.id
+    LEFT JOIN reviews r ON pl.labid = r.lab_id
+      AND COALESCE(u.org_id, ou.org_id) = $1
+    GROUP BY pl.labid, pl.cataloguename, pl.title, pl.description, pl.catalogue_level,
+            pl.catalogue_category, pl.startdate, pl.enddate, pl.user_id,
+            pl.catalogue_price, pl.created_at,
             u.organization, ou.organization, u.org_id, ou.org_id;
     `,
 
@@ -815,6 +852,8 @@ SELECT
 FROM singlevmproxmox_purchased_labs
 WHERE user_id = $1;
             `,
+
+
             UPDATE_CREATELAB_CATALOGUE: `
             UPDATE createlab
             SET cataloguetype = 'private'

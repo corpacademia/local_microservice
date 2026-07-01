@@ -13,7 +13,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const getOrgCataloguePurchased = async(req,res)=>{
     try {
-        const {role,org_id} = req.body;
+        const {role,org_id,user_id} = req.body;
         if(!role){
             return res.status(400).send({
                 success:false,
@@ -21,7 +21,10 @@ const getOrgCataloguePurchased = async(req,res)=>{
             })
         }
         let getCatalogues;
-        if(org_id){
+        if(role === 'trainer' && user_id){
+            getCatalogues = await pool.query(`SELECT * FROM lab_batch_purchased WHERE admin_id=$1`,[user_id])
+        }
+        else if(org_id){
             getCatalogues = await pool.query(purchaseQueries.GET_CATALOGUE_PURCHASE_DETAILS_ORG,[org_id])
         }
         else{
@@ -168,7 +171,8 @@ const subscriptionPurchase = async(session)=>{
         userId,
         orgId,
         organization,
-        total
+        total,
+        remainingDays
         } = session.order.order_tags;
       const insertData = await pool.query(cartQueries.INSERT_PLAN_PAYMENT, [
       userId,
@@ -189,7 +193,13 @@ const subscriptionPurchase = async(session)=>{
     const plan = await pool.query(GET_PLAN,[planId]);
     const usage = generateUsageFromFeatures(plan?.rows[0].features);
     const payment_id = insertData?.rows[0]?.id
-        const createKey = await pool.query(purchaseQueries.CREATE_LICENSE_KEY,[key,orgId,organization,planTier,planName,isAnnual ? "annual" : "monthly",'active',isAnnual ? "365" : "30",plan?.rows[0].features,usage,planId,payment_id]);
+    const checkActivePlan = await pool.query(purchaseQueries.CHECK_ACTIVE_PLAN,[orgId]);
+    let createKey;
+    if(checkActivePlan.rows.length){
+        createKey = await pool.query(purchaseQueries.UPDATE_ACTIVE_KEY,[planTier,planName,isAnnual ? "annual" : "monthly",plan?.rows[0].features,planId,key,orgId]);
+    }
+    else 
+         createKey = await pool.query(purchaseQueries.CREATE_LICENSE_KEY,[key,orgId,organization,planTier,planName,isAnnual ? "annual" : "monthly",'active',isAnnual ? "365" : "30",plan?.rows[0].features,usage,planId,payment_id]);
         if(!createKey.rows.length){
             throw new Error("Could not create the plan") 
         }
@@ -206,7 +216,7 @@ const subscriptionPurchase = async(session)=>{
             expiryDate: createKey.rows[0]?.expires_at,
             dashboardUrl: `${process.env.FRONTEND_URL}/dashboard/billing`
             }
-        await sendNotificationToMail(htmlTemplate,placeholder)
+        // await sendNotificationToMail(htmlTemplate,placeholder)
     } catch (error) {
         console.log("Plan Purchase Failed:".error);
         throw error;

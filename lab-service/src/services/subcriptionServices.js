@@ -297,13 +297,14 @@ const generateAndMailKey = async(req,res)=>{
     try {
         const {key,planId,billingCycle,orgId,organization,userId,orgEmail} = req.body;
         const isAnnual = billingCycle === "annual" || billingCycle === "true";
+        
        const plan = await pool.query(queries.GET_PLAN,[planId]);
-       const usage = generateUsageFromFeatures(plan?.rows[0].features);
+       const usage = generateUsageFromFeatures(plan?.rows[0]?.features);
        const checkActiveSubscription = await pool.query(queries.GET_LICENSE_KEY,[orgId,'active']);
 
         let createKey;
         if(checkActiveSubscription.rows.length){
-            createkey = await pool.query(queries.UPDATE_ACTIVE_KEY,[plan?.rows[0].tier,plan?.rows[0].name,isAnnual ? "annual" : "monthly", isAnnual ? "365" : "30", plan?.rows[0].features,planId,key])
+            createKey = await pool.query(queries.UPDATE_ACTIVE_KEY,[plan?.rows[0].tier,plan?.rows[0].name,isAnnual ? "annual" : "monthly", isAnnual ? "365" : "30", plan?.rows[0]?.features,planId,key,orgId])
         }
         else{
         createKey = await pool.query(queries.CREATE_LICENSE_KEY,[key,orgId,organization,plan?.rows[0].tier,plan?.rows[0].name,isAnnual ? "annual" : "monthly",'active',isAnnual ? "365" : "30",plan?.rows[0].features,usage,planId]);

@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.vite/
+out/
+.next/
+.nuxt/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Lock files (large, not useful for Claude)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment files (sensitive)
+.env
+.env.*
+!.env.example
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Static assets (not code)
+frontend/public/
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.svg
+**/*.ico
+**/*.woff
+**/*.woff2
+**/*.ttf
+**/*.eot
+
+# Database migrations (read only if asked)
+**/migrations/
+**/seeders/
+
+# Test fixtures
+**/__fixtures__/
+**/fixtures/
+
+# Cache
+.cache/
+.parcel-cache/
+**/.eslintcache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
