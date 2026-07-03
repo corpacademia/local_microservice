@@ -14,7 +14,7 @@ module.exports = {
     INSERT_INTO_LAB_EXERCISE_STATUS_USER:`INSERT INTO cloudsliceuserlabexercisestatus (module_id,exercise_id,isrunning,status,completed_in,user_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
     
     UPDATE_REMAINING_SEATS:`UPDATE lab_batch_purchased
-    SET assinged_users = GREATEST(COALESCE(assinged_users, 0) + $1, 0)
+    SET assigned_users = GREATEST(COALESCE(assigned_users, 0) + $1, 0)
     WHERE lab_id = $2
     AND org_id = $3`,
     UPDATE_LAB_REMAINING_SEATS:`UPDATE cloudslicelab SET remaining = GREATEST(COALESCE(remaining,0) + $1,0) WHERE labid=$1 `,

@@ -11,6 +11,7 @@ const credentialsRouter = require("../src/routes/cloudCredentialsRoutes");
 const fetchLabsRouter = require("../src/routes/fetchLabsRoutes");
 const purchaseRouter = require("../src/routes/purchaseRoutes");
 const subscriptionRouter = require("../src/routes/subscriptionRoutes")
+const usageRouter = require("../src/routes/usageRoutes")
 const path = require('path');
 const fs = require('fs');
 const mime = require('mime-types');
@@ -77,6 +78,7 @@ app.use('/',credentialsRouter);
 app.use('/',fetchLabsRouter);
 app.use('/',purchaseRouter);
 app.use('/',subscriptionRouter)
+app.use('/',usageRouter)
 
 
 

@@ -31,7 +31,9 @@ const {
     deleteAwsServices,
     addAwsServices,
     deleteIamAccount,
-    deleteBatchLabService
+    deleteBatchLabService,
+    disableIamLoginProfile,
+    enableIamLoginProfile
 } = require('../controllers/awsController');
 // const { awsConfigure } = require('../../../lab-service/src/controllers/labController');
 
@@ -66,6 +68,8 @@ router.post('/editAwsServices',editAwsServices);
 router.post('/deleteAwsServices',deleteAwsServices);
 router.post('/addAwsServices',addAwsServices);
 router.post('/deleteIamAccount',deleteIamAccount);
+router.post('/disableIamLoginProfile', disableIamLoginProfile);
+router.post('/enableIamLoginProfile', enableIamLoginProfile);
 
 module.exports = router;
 

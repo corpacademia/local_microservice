@@ -673,6 +673,60 @@ const addAwsServices = async(req,res)=>{
   }
 }
 
+const disableIamLoginProfile = async (req, res) => {
+  try {
+    const { userName } = req.body;
+    if (!userName) {
+      return res.status(400).json({ success: false, message: 'userName is required' });
+    }
+    const result = await terraformService.disableIamLoginProfile(userName);
+    return res.status(200).json({ success: true, message: 'Login profile disabled', result });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const enableIamLoginProfile = async (req, res) => {
+  try {
+    const { userName, role, labId, userId, orgId, purchased } = req.body;
+    if (!userName || !role || !labId) {
+      return res.status(400).json({ success: false, message: 'userName, role, and labId are required' });
+    }
+
+    // Python script only handles IAM; it prints the new password so we can update the DB here
+    const scriptOutput = await terraformService.enableIamLoginProfile(userName);
+
+    // Parse the new password from script stdout: line starting with "GENERATED_PASSWORD:"
+    const passwordLine = scriptOutput.result
+      ? String(scriptOutput.result).split('\n').find(l => l.startsWith('GENERATED_PASSWORD:'))
+      : null;
+    const newPassword = passwordLine ? passwordLine.replace('GENERATED_PASSWORD:', '').trim() : null;
+
+    if (newPassword) {
+      // Update the correct table based on role — done in Node.js to use the proper DB pool
+      let query, params;
+      if (role === 'user') {
+        const table = purchased ? 'cloudslice_purchased_labs' : 'cloudsliceuserassignment';
+        query = `UPDATE ${table} SET password = $1 WHERE labid = $2 AND user_id = $3`;
+        params = [newPassword, labId, userId];
+      } else if (role === 'orgsuperadmin' || role === 'labadmin') {
+        query = `UPDATE cloudsliceorgassignment SET password = $1 WHERE labid = $2 AND orgid = $3`;
+        params = [newPassword, labId, orgId];
+      } else if (role === 'superadmin') {
+        query = `UPDATE cloudslicelab SET password = $1 WHERE labid = $2`;
+        params = [newPassword, labId];
+      }
+      if (query) await pool.query(query, params);
+    }
+
+    return res.status(200).json({ success: true, message: 'Login profile enabled', newPassword });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 //delete iam account
 const deleteIamAccount = async(req,res)=>{
   try {
@@ -756,5 +810,7 @@ module.exports = {
   deleteAwsServices,
   addAwsServices,
   deleteIamAccount,
-  deleteBatchLabService
+  deleteBatchLabService,
+  disableIamLoginProfile,
+  enableIamLoginProfile
 };

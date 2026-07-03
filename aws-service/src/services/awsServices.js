@@ -804,6 +804,26 @@ const restartInstanceService = async (instance_id, user_type) => {
 //   }
 // }
 
+const disableIamLoginProfile = async (...args) => {
+  try {
+    const scriptPath = path.resolve(__dirname, '../terraformScripts/disableIamLoginProfile.py');
+    const result = await executeIamScript(scriptPath, ...args);
+    return { success: true, message: 'Login profile disabled', result };
+  } catch (error) {
+    throw new Error(`Error disabling login profile: ${error}`);
+  }
+};
+
+const enableIamLoginProfile = async (userName) => {
+  try {
+    const scriptPath = path.resolve(__dirname, '../terraformScripts/enableIamLoginProfile.py');
+    const result = await executeIamScript(scriptPath, userName);
+    return { success: true, message: 'Login profile enabled', result };
+  } catch (error) {
+    throw new Error(`Error enabling login profile: ${error}`);
+  }
+};
+
 module.exports = {
   ec2Terraform,
   runTf,
@@ -833,5 +853,7 @@ module.exports = {
   deletePermissions,
   addAwsServices,
   deleteIamAccount,
-  deleteBatchLabService
+  deleteBatchLabService,
+  disableIamLoginProfile,
+  enableIamLoginProfile
 };

@@ -654,6 +654,24 @@ const createTables = async()=>{
         ); 
           `)
 
+        // Daily usage tracking – accumulates minutes used per user per lab per calendar day.
+        // Used by usageController to enforce number_hours_day limits without touching existing tables.
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS lab_daily_usage (
+            id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id     UUID NOT NULL,
+            lab_id      UUID NOT NULL,
+            usage_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+            minutes_used INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (user_id, lab_id, usage_date)
+          );
+        `);
+
+        // Ensure singlevmdatacenter_lab carries the hours-per-day limit set at conversion time
+        await pool.query(`
+          ALTER TABLE singlevmdatacenter_lab ADD COLUMN IF NOT EXISTS number_hours_day INTEGER;
+        `);
+
         console.log(`Successfully created tables`);
 
     } catch (error) {
