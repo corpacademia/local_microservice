@@ -978,7 +978,7 @@ const getAllLabsFromUserAssignment = async (userId) => {
     const allLabs = [];
 
     for (const assignment of assignments) {
-      const { labid,start_date, end_date } = assignment;
+      const { labid,start_date, end_date, number_hours_day } = assignment;
 
       const labResult = await pool.query(cloudSliceAwsQueries.GET_LABS_ON_ID, [labid]);
 
@@ -991,7 +991,8 @@ const getAllLabsFromUserAssignment = async (userId) => {
         ...labResult.rows[0],
         startdate:start_date, // override the user lab start date
         enddate:end_date, // override or attach user-specific enddate
-        status:assignment.status
+        status:assignment.status,
+        number_hours_day:number_hours_day
       });
     }
 
@@ -1195,6 +1196,24 @@ const updateCloudSliceLabRunningState = async(data)=>{
     }
 }
 
+//update cloudslice org lab running state (for orgsuperadmin / labadmin on purchased labs)
+const updateCloudSliceLabRunningStateOfOrg = async(data)=>{
+    try {
+        const {labId, orgId, isRunning} = data;
+        if(!labId || !orgId){
+            throw new Error('Please provide labId and orgId');
+        }
+        const result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_ORG_RUNNING, [isRunning, labId, orgId]);
+        if(!result.rows.length){
+            throw new Error('No org lab assignment found with this id');
+        }
+        return result.rows[0];
+    } catch (error) {
+        console.log(error);
+        throw new Error('Error in updating org running state: ' + error.message);
+    }
+}
+
 //update cloudslice lab status for org assigned
 const updateCloudSliceLabStatusOfOrg = async(data)=>{
     try {
@@ -1225,6 +1244,20 @@ const updateCloudSliceLabOfUser = async(status,launched,labId,userId,purchased)=
         else{
             result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_USER_STATUS,[status,launched,labId,userId]);
         }
+        
+        return result.rows[0]
+    } catch (error) {
+        console.log(error);
+        throw new Error("Error in updating",error.message);
+    }
+}
+
+const updateCloudSliceRunningStatus = async(isRunning,labId,orgId)=>{
+    try {
+        if(!labId || !orgId){
+            throw new Error("Please Provide the id");
+        }
+        const  result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_ORG_RUNNINGSTATUS,[isRunning,labId,orgId])
         
         return result.rows[0]
     } catch (error) {
@@ -1419,6 +1452,7 @@ module.exports = {
   getUserQuizExerciseStatus,
   updateCloudSliceLabStatus,
   updateCloudSliceLabStatusOfOrg,
+  updateCloudSliceLabRunningStateOfOrg,
   getUserAssignedLabStatus,
   updateCloudSliceLabOfUser,
   getAllLabDetailsForOrgAssignment,
@@ -1431,6 +1465,7 @@ module.exports = {
   getUserPurchasedLabs,
   updateDates,
   getCloudSliceDetailsForCatalogue,
-  getUserPurchasedLabOnId
+  getUserPurchasedLabOnId,
+  updateCloudSliceRunningStatus
 }
 

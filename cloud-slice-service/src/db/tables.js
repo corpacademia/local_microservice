@@ -45,6 +45,7 @@ const createTables = async () => {
 );
 
  `)
+        await pool.query(`ALTER TABLE cloudsliceorgassignment ADD COLUMN IF NOT EXISTS isrunning BOOLEAN DEFAULT false`)
 
         //create a table for cloudslice user assignment
         await pool.query(`

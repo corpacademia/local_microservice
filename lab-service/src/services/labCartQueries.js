@@ -32,8 +32,8 @@ module.exports = {
 
 
 
-    CREATE_SINGLEAWS_LAB_PURCHASE:`INSERT INTO lab_batch_purchased(lab_id,admin_id,org_id,org_name,configured_by,number_of_days,number_of_users,expiry_date,status,payment_id,lab_title,type)
-                                  VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + ($8 * INTERVAL '1 day'),$9,$10,$11,$12) RETURNING *`,
+    CREATE_SINGLEAWS_LAB_PURCHASE:`INSERT INTO lab_batch_purchased(lab_id,admin_id,org_id,org_name,configured_by,number_of_days,number_of_users,expiry_date,status,payment_id,lab_title,type,number_hours_day)
+                                  VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + ($8 * INTERVAL '1 day'),$9,$10,$11,$12,$13) RETURNING *`,
     CREATE_SINGLEVM_DATACENTER_PURCHASE:`INSERT INTO singlevmdatacenter_purchased (labid,user_id,assigned_by,creds_id,payment_id,duration,number_hours_day) VALUES($1,$2,$3,$4,$5,$6,$7)`,
     UPDATE_SINGLEVM_DATACENTER_CREDS_ASSIGNMENT_FOR_RANDOM_USER:`WITH to_update AS (
         SELECT id
@@ -53,7 +53,7 @@ module.exports = {
     WHERE org_id = $2 AND status = $3;`,
     
     INSERT_ASSIGNLAB_SINGLEVM_AWS:`INSERT INTO singlevm_aws_purchased_labs (labid, user_id, payment_id,  duration,number_hours_day) VALUES ($1, $2, $3, $4,$5) RETURNING *`,
-    INSERT_ASSINGLAB_CLOUDSLICE_AWS:`INSERT INTO cloudslice_purchased_labs (labid,user_id,duration,payment_id) VALUES($1,$2,$3,$4) RETURNING *`,
+    INSERT_ASSINGLAB_CLOUDSLICE_AWS:`INSERT INTO cloudslice_purchased_labs (labid,user_id,duration,payment_id,number_hours_day) VALUES($1,$2,$3,$4,$5) RETURNING *`,
     INSERT_ASSINGLAB_SINGLEVM_PROXMOX_PURCHASED:`INSERT INTO singlevmproxmox_purchased_labs (labid,user_id,duration,payment_id,vmname,number_hours_day) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
     INSERT_ASSIGNLAB_PROXMOX_CLUSTER_PURCHASED:`INSERT INTO proxmox_cluster_purchased(labid,user_id,duration,number_hours_day,payment_id) VALUES($1,$2,$3,$4,$5) RETURNING *`,
 

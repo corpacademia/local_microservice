@@ -260,7 +260,12 @@ SELECT
     WHEN COALESCE(lb.purchased, false) = true
     THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
     ELSE COALESCE(cl.remaining, 0)
-  END AS quantity
+  END AS quantity,
+  CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 
 FROM createlab cl
 LEFT JOIN lab_batch lb
@@ -297,7 +302,12 @@ SELECT
     WHEN COALESCE(csoa.purchased, false) = true
     THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
     ELSE COALESCE(csl.remaining, 0)
-  END AS quantity
+  END AS quantity,
+  CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 
 FROM cloudslicelab csl
 LEFT JOIN cloudsliceorgassignment csoa
@@ -334,7 +344,12 @@ SELECT
     WHEN COALESCE(spoa.purchased, false) = true
     THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
     ELSE COALESCE(sp.remaining, 0)
-  END AS quantity
+  END AS quantity,
+  CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 
 FROM singlevmproxmox_lab sp
 LEFT JOIN singlevmproxmoxorgassignment spoa
@@ -371,7 +386,12 @@ SELECT
     WHEN COALESCE(sdoa.purchased, false) = true
     THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
     ELSE COALESCE(sd.remaining, 0)
-  END AS quantity
+  END AS quantity,
+  CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 
 FROM singlevmdatacenter_lab sd
 LEFT JOIN singlevmdatacenterorgassignment sdoa
@@ -408,7 +428,12 @@ SELECT
     WHEN COALESCE(vcoa.purchased, false) = true
     THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
     ELSE COALESCE(vc.remaining, 0)
-  END AS quantity
+  END AS quantity,
+  CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 
 FROM vmclusterdatacenter_lab vc
 LEFT JOIN vmclusterdatacenterorgassignment vcoa
@@ -445,7 +470,12 @@ SELECT
     WHEN COALESCE(poa.purchased, false) = true
     THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
     ELSE COALESCE(pl.remaining, 0)
-  END AS quantity
+  END AS quantity,
+  CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 
 FROM proxmoxcluster_lab pl
 LEFT JOIN proxmoxcluster_org_assignment poa
@@ -476,7 +506,12 @@ SELECT
         THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
         ELSE cl.remaining
     END AS quantity,
-    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased,
+     CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 FROM createlab cl
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = cl.lab_id
@@ -498,7 +533,12 @@ SELECT
         THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
         ELSE csl.remaining
     END AS quantity,
-    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased,
+     CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 FROM cloudslicelab csl
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = csl.labid
@@ -520,7 +560,12 @@ SELECT
         THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
         ELSE sp.remaining
     END AS quantity,
-    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased,
+     CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 FROM singlevmproxmox_lab sp
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = sp.labid
@@ -541,7 +586,12 @@ SELECT
         THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
         ELSE sd.remaining
     END AS quantity,
-    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased,
+     CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 FROM singlevmdatacenter_lab sd
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = sd.lab_id
@@ -563,7 +613,12 @@ SELECT
         THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
         ELSE vc.remaining
     END AS quantity,
-    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased,
+     CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
     FROM vmclusterdatacenter_lab vc
     LEFT JOIN lab_batch_purchased lbp
         ON lbp.lab_id = vc.labid
@@ -585,7 +640,12 @@ SELECT
         THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
         ELSE pl.remaining
     END AS quantity,
-    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased
+    CASE WHEN lbp.purchased_id IS NOT NULL THEN true ELSE false END AS purchased,
+     CASE
+    WHEN lbp.purchased_id IS NOT NULL
+    THEN lbp.number_hours_day
+    ELSE NULL
+END AS number_hours_day
 FROM proxmoxcluster_lab pl
 LEFT JOIN lab_batch_purchased lbp
     ON lbp.lab_id = pl.labid
@@ -599,7 +659,7 @@ WHERE pl.labid = $1::uuid
     CHECK_USER_LABS_VMCLUSTERDATACENTER:`SELECT * FROM vmclusterdatacenteruserassignment where labid=$1 and  user_id=$2`,
     CHECK_USER_ASSIGNED_LAB:`SELECT * FROM cloudsliceuserassignment where labid=$1 and user_id=$2`,
     INSERT_DATACENTER_VM_USERASSIGNMENT :`INSERT INTO singlevmdatacenteruserassignment(labid,user_id,assigned_by,startdate,enddate,creds_id,assignment_type,batch_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    INSERT_CLOUDSLICE_USER_ASSIGNMENT:`INSERT INTO cloudsliceuserassignment(labid,user_id,assigned_by,start_date,end_date,assignment_type,batch_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    INSERT_CLOUDSLICE_USER_ASSIGNMENT:`INSERT INTO cloudsliceuserassignment(labid,user_id,assigned_by,start_date,end_date,assignment_type,batch_id,number_hours_day) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
 
     UPDATE_BATCH_DETAILS:`UPDATE  batches set name=$1,description=$2,startdate=$3,enddate=$4 where id=$5 RETURNING *`,
     UPDATE_LAB_BATCH:`UPDATE batchlabs set lab_id=$1,lab_name=$2,start_date=$3,end_date=$4 ,remaining_days=$5,trainer_id=$6,trainer_name=$7 WHERE lab_id=$8 RETURNING *`,

@@ -1075,7 +1075,7 @@ const insertPaymentAndAssignLab = async (paymentData) => {
 
         if(org && user?.org_id){
           insertLab = await pool.query(cartQueries.CREATE_SINGLEAWS_LAB_PURCHASE,[
-              lab_id,user?.id,user?.org_id,user?.organization,user_id,duration,quantity,duration,'active',paymentId,name,type
+              lab_id,user?.id,user?.org_id,user?.organization,user_id,duration,quantity,duration,'active',paymentId,name,type,hoursPerDay
             ]);
             await pool.query(cartQueries.UPDATE_CATALOGUES_PLAN,[1,user?.org_id,'active'])
         }
@@ -1093,6 +1093,7 @@ const insertPaymentAndAssignLab = async (paymentData) => {
           userId,
           duration,
           paymentId,
+          hoursPerDay
         ]);
           }
         const addEnrolled = await pool.query(cartQueries.INSERT_CLOUDSLICE_AWS_PURCHASED_LAB_ENROLLMENTS,[1,lab_id])
@@ -1979,7 +1980,7 @@ const insertFreeLab = async (req, res) => {
       // Insert lab assignment
       const insertLab = await pool.query(
         cartQueries.INSERT_ASSINGLAB_CLOUDSLICE_AWS,
-        [labId, userId, duration, null]
+        [labId, userId, duration, null,number_hours_day]
       );
 
       // 

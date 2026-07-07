@@ -33,7 +33,13 @@ module.exports = {
     GET_ALL_LABS_ON_CREATED_USER:`SELECT * FROM cloudslicelab where createdby = ANY($1)`,
      GET_ALL_LABS_ON_SUPERADMIN_USER:`SELECT * FROM cloudslicelab`,
     GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENT:`SELECT * FROM cloudsliceorgassignment where orgid = $1 and admin_id = $2`,
-     GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENTS:`SELECT * FROM cloudsliceorgassignment where orgid = $1`,
+     GET_ALL_LABS_FROM_ORGANIZATION_ASSIGNMENTS:`SELECT cl.*,
+     CASE
+     WHEN cl.purchased is true
+     Then lbp.number_hours_day
+     ELSE NULL
+     END AS number_hours_day
+     FROM cloudsliceorgassignment cl LEFT JOIN lab_batch_purchased lbp ON cl.purchased_id = lbp.purchased_id  where cl.orgid = $1`,
     CHECK_LAB_EXISTS:`SELECT * FROM cloudsliceorgassignment where orgid = $1 AND labid = $2 AND admin_id = $3`,
     GET_LABS_ON_ID:`SELECT *,DATE_PART('day', enddate - startdate) AS estimatedDuration FROM cloudslicelab where labid = $1`,
     GET_ALL_CLOUDSLICE_LABS:`SELECT * FROM cloudslicelab WHERE createdby = $1`,
@@ -135,10 +141,13 @@ module.exports = {
   UPDATE_CLOUDSLICELAB:`UPDATE cloudslicelab set cataloguename=$1,cataloguetype=$2,level=$4,category=$5,price=$6,number_hours_day=$7 where labid=$3 RETURNING *`,
   UPDATE_CLOUDSLICELAB_STATUS:`UPDATE cloudslicelab set status=$1 ,launched=$2 where labid=$3 and  createdby=$4 RETURNING *`,
   UPDATE_CLOUDSLICELAB_ORG_STATUS:`UPDATE cloudsliceorgassignment set status=$1 ,launched=$2 where labid=$3 and orgid=$4 Returning *`,
+  UPDATE_CLOUDSLICELAB_ORG_RUNNINGSTATUS:`UPDATE cloudsliceorgassignment set isrunning=$1 where labid=$3 and orgid=$4 Returning *`,
+  
   UPDATE_CLOUDSLICELAB_USER_STATUS:'UPDATE cloudsliceuserassignment set status=$1, launched=$2 where labid=$3 and user_id=$4 Returning *',
   UPDATE_CLOUDSLICELAB_USER_PURCHASED_STATUS:'UPDATE cloudslice_purchased_labs set status=$1, launched=$2 where labid=$3 and user_id=$4 Returning *',
   UPDATE_CLOUDSLICELAB_USER_RUNNING:`UPDATE cloudsliceuserassignment set isrunning=$1 where labid=$2 and user_id=$3 Returning *`,
   UPDATE_PURCHASED_CLOUDSLICELAB_USER_RUNNING:`UPDATE cloudslice_purchased_labs set isrunning=$1 where labid=$2 and user_id=$3 Returning *`,
+  UPDATE_CLOUDSLICELAB_ORG_RUNNING:`UPDATE cloudsliceorgassignment set isrunning=$1 where labid=$2 and orgid=$3 Returning *`,
   UPDATE_CLOUDSLICELAB_USER_TIMES:`UPDATE cloudsliceuserassignment set start_date=$1,end_date=$2 where labid=$3 and user_id=$4 RETURNING *`,
   UPDATE_CLOUDSLICELAB_ORG_TIMES:`UPDATE cloudsliceorgassignment set startdate=$1,enddate=$2 where labid=$3 and orgid=$4 RETURNING *`
 }

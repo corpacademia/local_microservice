@@ -28,7 +28,7 @@ const getUserData = async(userId,sessionToken)=>{
   }
 }
 
-const assignCloudsliceLab = async(lab, user, assign_admin_id, start_date, end_date,sessionToken,batch_id)=>{
+const assignCloudsliceLab = async(lab, user, assign_admin_id, start_date, end_date,sessionToken,batch_id,number_hours_day)=>{
     const existsLab =  await pool.query(batchQueries.CHECK_USER_ASSIGNED_LAB,[lab,user]);
             const userData = await getUserData(user,sessionToken)
             // if(existsLab.rows.length){
@@ -40,7 +40,7 @@ const assignCloudsliceLab = async(lab, user, assign_admin_id, start_date, end_da
             // }
             const result = await pool.query(
               batchQueries.INSERT_CLOUDSLICE_USER_ASSIGNMENT,
-              [lab, user, assign_admin_id, start_date, end_date,'batch',batch_id]
+              [lab, user, assign_admin_id, start_date, end_date,'batch',batch_id,number_hours_day]
             );
       
             if (!result.rows.length) {
@@ -220,6 +220,7 @@ const addUsersToBatch = async(req,res)=>{
                     })
                 }
                 let labDetails = getLab.rows[0];
+                
                 if(labDetails?.quantity !== -1 && labDetails?.quantity <= 0){
                   return res.status(400).send({
                     success:false,
@@ -268,7 +269,7 @@ const addUsersToBatch = async(req,res)=>{
                        ]);
                 }
                 else if(labDetails.type === 'cloudslice'){
-                    await assignCloudsliceLab (labId, userId, assignedBy,getLabDetails.start_date,getLabDetails.end_date,sessionToken,batchId)
+                    await assignCloudsliceLab (labId, userId, assignedBy,getLabDetails.start_date,getLabDetails.end_date,sessionToken,batchId,labDetails.number_hours_day)
                 }
                 else if (labDetails.type === 'singlevm-datacenter') {
                         const checkAlreadyAssigned = await pool.query(batchQueries.CHECK_USERASSIGNED_SINGLEVM_DATACENTER_LAB, [labId,userId]);
@@ -459,7 +460,8 @@ const addLabsToBatch = async (req, res) => {
       assigned_by,
       trainer_name,
       type,
-      org_id
+      org_id,
+      number_hours_day
     } = req.body;
     const cookies = cookie.parse(req?.headers?.cookie || '');
     const sessionToken = cookies.session_token;
@@ -635,7 +637,7 @@ const addLabsToBatch = async (req, res) => {
       }
       //cloudslice
       else if (type === 'cloudslice'){
-        await assignCloudsliceLab(lab_id, user.user_id, assigned_by, start_date, end_date,sessionToken,batch_id)
+        await assignCloudsliceLab(lab_id, user.user_id, assigned_by, start_date, end_date,sessionToken,batch_id,number_hours_day)
       }
       // proxmox-cluster: create user assignment + per-user VM placeholder rows
       else if (type === 'proxmox-cluster'){

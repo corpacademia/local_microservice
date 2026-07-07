@@ -1142,6 +1142,29 @@ const getAllLabDetailsForOrgAssigned = async(req,res)=>{
         })
     }
 }
+const updateCloudSliceRunningStatus = async(req,res)=>{
+    try {
+        const {isRunning,labId,orgId} = req.body;
+        const result = await cloudSliceAwsService.updateCloudSliceRunningStatus(isRunning,labId,orgId); if(!result){
+            return res.status(404).send({
+                success:false,
+                message:"No cloud slice lab found with this id"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully fetched cloud slice lab assigned to user",
+            data:result
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Internal server error",
+            error:error.message
+        })
+    }
+}
 
 //get user assigned lab status
 const getUserAssignedLabStatus = async(req,res)=>{
@@ -1352,7 +1375,6 @@ const updateCloudSliceLabStatus = async(req,res)=>{
 const updateCloudSliceLabStatusOfOrg = async(req,res)=>{
     try {
         const data = req.body;
-        console.log(data)
         if(!data){
             return res.status(400).send({
                 success:false,
@@ -1413,6 +1435,34 @@ const updateCloudSliceLabOfUser = async(req,res)=>{
     }
 }
 //update running state of cloudslicelab of user
+const updateCloudSliceLabRunningStateOfOrg = async(req,res)=>{
+    try {
+        const data = req.body;
+        if(!data){
+            throw new Error("Please provide the details");
+        }
+        const response = await cloudSliceAwsService.updateCloudSliceLabRunningStateOfOrg(data);
+        if(!response){
+            return res.status(404).send({
+                success:false,
+                message:"No org lab assignment found with this id"
+            })
+        }
+        return res.status(200).send({
+            success:true,
+            message:"Successfully updated the org lab running state",
+            data:response
+        })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({
+            success:false,
+            message:"Could not update the org lab running state",
+            error:error.message
+        })
+    }
+}
+
 const updateCloudSliceLabRunningStateOfUser = async(req,res)=>{
     try {
         const data = req.body;
@@ -1574,6 +1624,7 @@ module.exports = {
     updateUserCloudSliceLabTimes,
     getAllCloudSliceLabs,
     updateCloudSliceLabRunningStateOfUser,
+    updateCloudSliceLabRunningStateOfOrg,
     addLabStatusOfUser,
     getUserLabExerciseStatus,
     updateCatalogueDetails,
@@ -1581,5 +1632,6 @@ module.exports = {
     updateDates,
     getCloudSliceDetailsForCatalogue,
     getUserPurchasedLabOnId,
-    getCloudSliceLab
+    getCloudSliceLab,
+    updateCloudSliceRunningStatus
 }
