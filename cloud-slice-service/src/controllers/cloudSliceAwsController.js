@@ -1157,7 +1157,6 @@ const updateCloudSliceRunningStatus = async(req,res)=>{
             data:result
         })
     } catch (error) {
-        console.log(error);
         return res.status(500).send({
             success:false,
             message:"Internal server error",

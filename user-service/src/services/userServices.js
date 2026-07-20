@@ -38,10 +38,11 @@ const sendNotificationToMail = async (template, placeholders) => {
 
   // Configure mail transporter
   const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.sendgrid.net',
+    port: 587,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
+      user: 'apikey',
+      pass: process.env.SENDGRID_API
     }
   });
   const mailOptions = {
@@ -82,14 +83,16 @@ const signupService = async (name, email, password,organization,isNewOrganizatio
     if (!organization) {
           result = await pool.query(userQueries.insertRandomUserQuery,[name, email, hashedPassword, null, null, null])
       // optionally handle or throw
-    } else if (organization.org_admin !== null) {
+    } 
+    else if (organization.org_admin !== null) {
       // Regular user being added to an existing org
       result = await pool.query(
         userQueries.insertUserQuery,
         [name, email, hashedPassword, organization.org_admin, organization.organization_name, organization.org_type, organization.id]
       );
     }
-  } else {
+  }
+   else {
     // New organization — insert the admin user
     result = await pool.query(
       userQueries.insertAdminUserQuery,
@@ -98,6 +101,9 @@ const signupService = async (name, email, password,organization,isNewOrganizatio
   }
   
   //send mail to organiztion admin
+  if (!organization || !organization.org_admin) {
+    return result.rows[0];
+  }
    const userSettings = await pool.query(userQueries.GET_USER_NOTIFICATION_SETTINGS, [organization.org_admin]);
         if (userSettings.rowCount > 0) {
            const settings = userSettings.rows[0];
@@ -163,10 +169,11 @@ for (const key in placeholders) {
 }
       // 4. Configure mail transporter
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.sendgrid.net',
+  port: 587,
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+    user: 'apikey',
+    pass: process.env.SENDGRID_API
   }
 });
 
@@ -225,11 +232,12 @@ const sendVerificationEmail = async (email,type) =>{
     } 
 
     // 3. Configure mail transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      const transporter = nodemailer.createTransport({
+      host: 'smtp.sendgrid.net',
+      port: 587,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: 'apikey',
+        pass: process.env.SENDGRID_API
       }
     });
 

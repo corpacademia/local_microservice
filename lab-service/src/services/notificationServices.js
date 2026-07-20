@@ -31,10 +31,11 @@ const sendNotificationToMail = async (template, placeholders) => {
 
   // Configure mail transporter
   const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.sendgrid.net',
+    port: 587,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
+      user: 'apikey',
+      pass: process.env.SENDGRID_API
     }
   });
 
@@ -349,4 +350,53 @@ cron.schedule('*/30 * * * *', async () => {
 
 };
 
-module.exports = { executeNotificationCron ,sendNotificationToMail};
+// ── Stale-session reaper ─────────────────────────────────────────────────────
+// Runs every minute. Any active session whose last_heartbeat is older than
+// 2 minutes is treated as abandoned (tab closed, browser crashed, etc.) and
+// is closed with its actual usage accumulated into lab_daily_usage.
+const executeStaleSessionReaper = () => {
+  cron.schedule('* * * * *', async () => {
+    try {
+      const staleSessions = await pool.query(
+        `SELECT id, user_id, labid, starttime
+         FROM user_sessions
+         WHERE isactive = true
+         AND last_heartbeat < NOW() - INTERVAL '2 minutes'`
+      );
+
+      for (const session of staleSessions.rows) {
+        try {
+          // Close the session and capture actual duration
+          const closed = await pool.query(
+            `UPDATE user_sessions
+             SET isactive = false, endtime = NOW()
+             WHERE id = $1 AND isactive = true
+             RETURNING starttime, endtime`,
+            [session.id]
+          );
+          if (!closed.rows.length) continue;
+
+          const { starttime, endtime } = closed.rows[0];
+          const minutesUsed = Math.max(1, Math.ceil((new Date(endtime) - new Date(starttime)) / 60000));
+
+          // Accumulate into daily usage
+          await pool.query(
+            `INSERT INTO lab_daily_usage (user_id, lab_id, usage_date, minutes_used)
+             VALUES ($1, $2, CURRENT_DATE, $3)
+             ON CONFLICT (user_id, lab_id, usage_date)
+             DO UPDATE SET minutes_used = lab_daily_usage.minutes_used + EXCLUDED.minutes_used`,
+            [session.user_id, session.labid, minutesUsed]
+          );
+
+          console.log(`[stale-session-reaper] closed session ${session.id} — ${minutesUsed} min recorded`);
+        } catch (innerErr) {
+          console.error(`[stale-session-reaper] failed for session ${session.id}:`, innerErr.message);
+        }
+      }
+    } catch (err) {
+      console.error('[stale-session-reaper] query error:', err.message);
+    }
+  });
+};
+
+module.exports = { executeNotificationCron, sendNotificationToMail, executeStaleSessionReaper };

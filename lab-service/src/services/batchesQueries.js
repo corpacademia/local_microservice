@@ -286,20 +286,22 @@ SELECT
   csl.labid AS lab_id,
   csl.title,
   csl.createdby AS user_id,
-   lbp.admin_id,
+  lbp.admin_id,
   CASE
-    WHEN COALESCE(csoa.purchased, false) = true
-    THEN csoa.status
+    WHEN COALESCE(csoa.purchased, false) = true OR lbp.lab_id IS NOT NULL
+    THEN COALESCE(csoa.status, lbp.status, csl.status)
     ELSE csl.status
   END AS status,
 
   csl.startdate AS start_date,
   csl.enddate AS end_date,
   'cloudslice' AS type,
-  COALESCE(csoa.purchased, false) AS purchased,
+  CASE WHEN COALESCE(csoa.purchased, false) = true OR lbp.lab_id IS NOT NULL
+    THEN true ELSE false
+  END AS purchased,
 
   CASE
-    WHEN COALESCE(csoa.purchased, false) = true
+    WHEN COALESCE(csoa.purchased, false) = true OR lbp.lab_id IS NOT NULL
     THEN COALESCE(lbp.number_of_users - lbp.assigned_users, 0)
     ELSE COALESCE(csl.remaining, 0)
   END AS quantity,
@@ -320,6 +322,7 @@ WHERE
   $3 = true
   OR csl.createdby = ANY($1::uuid[])
   OR csoa.labid IS NOT NULL
+  OR lbp.lab_id IS NOT NULL
 
 UNION ALL
 

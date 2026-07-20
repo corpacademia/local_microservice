@@ -274,6 +274,12 @@ const createTables = async()=>{
               )
               `)
 
+            // Add last_heartbeat column to user_sessions if not already present
+            await pool.query(`
+              ALTER TABLE user_sessions
+              ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMPTZ DEFAULT NOW()
+            `)
+
             //user credits table
             await pool.query(`
               CREATE TABLE user_credits (

@@ -1221,6 +1221,24 @@ const updateCloudSliceLabStatusOfOrg = async(data)=>{
        if(!labId || !orgId || !status ){
            throw new Error("Please Provide all the required fields")
        }
+
+       // If this is the first launch, claim 1 admin seat from the purchased quantity
+       if (launched === true) {
+           const prev = await pool.query(
+               `SELECT launched FROM cloudsliceorgassignment WHERE labid=$1 AND orgid=$2`,
+               [labId, orgId]
+           );
+           const wasLaunched = prev.rows[0]?.launched || false;
+           if (!wasLaunched) {
+               await pool.query(
+                   `UPDATE lab_batch_purchased
+                    SET assigned_users = LEAST(COALESCE(assigned_users, 0) + 1, number_of_users)
+                    WHERE lab_id=$1 AND org_id=$2 AND status='active'`,
+                   [labId, orgId]
+               );
+           }
+       }
+
        const result = await pool.query(cloudSliceAwsQueries.UPDATE_CLOUDSLICELAB_ORG_STATUS,[status,launched,labId,orgId]);
        if(!result.rows.length){
            throw new Error("No lab found with this id")

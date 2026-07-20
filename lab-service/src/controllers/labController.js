@@ -8,8 +8,11 @@ const uploadDir = path.join(__dirname, '../public/uploads');
 
 const {executeCron} = require('../services/labStatusService');
 executeCron();
-const {executeNotificationCron} = require('../services/notificationServices');
+const {executeNotificationCron, executeStaleSessionReaper} = require('../services/notificationServices');
 executeNotificationCron();
+executeStaleSessionReaper();
+const { startBrowserStreamServer } = require('../services/browserStreamServer');
+startBrowserStreamServer();
 
 const createLab = async (req, res) => {
   try {

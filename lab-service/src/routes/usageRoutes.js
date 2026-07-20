@@ -1,5 +1,5 @@
 const express = require('express');
-const { startLabSession, stopLabSession, getDailyUsage } = require('../controllers/usageController');
+const { startLabSession, stopLabSession, getDailyUsage, heartbeatLabSession } = require('../controllers/usageController');
 
 const router = express.Router();
 
@@ -11,5 +11,8 @@ router.post('/stopLabSession', stopLabSession);
 
 // Get today's usage and remaining time for a user+lab pair
 router.post('/getDailyUsage', getDailyUsage);
+
+// Heartbeat — frontend pings this every 30s to keep session alive
+router.post('/heartbeat', heartbeatLabSession);
 
 module.exports = router;

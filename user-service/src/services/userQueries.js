@@ -3,7 +3,7 @@ const { updateUser } = require("./userServices");
 module.exports = {
     insertUserQuery : `INSERT INTO organization_users (name, email, password,admin_id,organization,organization_type,org_id) VALUES ($1, $2, $3,$4,$5,$6,$7) RETURNING *`,
     insertAdminUserQuery : `INSERT INTO users (name, email, password,organization,organization_type,role,org_id) VALUES ($1, $2, $3,$4,$5,$6,$7) RETURNING *`,
-    insertRandomUserQuery : `INSERT INTO users (name, email, password,organization,organization_type,org_id) VALUES ($1, $2, $3,$4,$5,$6) RETURNING *`,
+    insertRandomUserQuery : `INSERT INTO users (name, email, password,organization,organization_type,org_id,status) VALUES ($1, $2, $3,$4,$5,$6,'inactive') RETURNING *`,
     insertVerificationCode:`INSERT INTO email_verification_code(email,verification_code,expires_at) VALUES($1,$2,NOW() + INTERVAL '10 minutes') RETURNING *`,
     INSERT_NOTIFICATION:`INSERT INTO notifications (type,title,message,priority,user_id,metadata) values($1,$2,$3,$4,$5,$6) RETURNING *`,
 

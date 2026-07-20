@@ -56,7 +56,27 @@ const startLabSession = async (req, res) => {
       return res.status(400).json({ success: false, message: 'user_id and lab_id are required' });
     }
 
-    // How many minutes has this user already used today for this lab?
+    // Step 1: accumulate time from any orphaned active sessions before closing them.
+    // This must happen first — otherwise their elapsed minutes are invisible to
+    // lab_daily_usage and the remaining-time shown to the user is too high.
+    const orphans = await pool.query(
+      `UPDATE user_sessions SET isactive=false, endtime=NOW()
+       WHERE user_id=$1 AND labid=$2 AND isactive=true
+       RETURNING starttime, endtime`,
+      [user_id, lab_id]
+    );
+    for (const row of orphans.rows) {
+      const orphanMinutes = Math.max(1, Math.ceil((new Date(row.endtime) - new Date(row.starttime)) / 60000));
+      await pool.query(
+        `INSERT INTO lab_daily_usage (user_id, lab_id, usage_date, minutes_used)
+         VALUES ($1, $2, CURRENT_DATE, $3)
+         ON CONFLICT (user_id, lab_id, usage_date)
+         DO UPDATE SET minutes_used = lab_daily_usage.minutes_used + EXCLUDED.minutes_used`,
+        [user_id, lab_id, orphanMinutes]
+      );
+    }
+
+    // Step 2: now read the accurate accumulated minutes (includes any orphan time above).
     const usageResult = await pool.query(
       `SELECT COALESCE(minutes_used, 0) AS minutes_used
        FROM lab_daily_usage
@@ -81,13 +101,6 @@ const startLabSession = async (req, res) => {
         limitMinutes,
       });
     }
-
-    // Close any orphaned open sessions for this user+lab (safety cleanup)
-    await pool.query(
-      `UPDATE user_sessions SET isactive=false, endtime=NOW()
-       WHERE user_id=$1 AND labid=$2 AND isactive=true`,
-      [user_id, lab_id]
-    );
 
     // Insert new session record
     const sessionResult = await pool.query(
@@ -172,7 +185,18 @@ const getDailyUsage = async (req, res) => {
        WHERE user_id=$1 AND lab_id=$2 AND usage_date=CURRENT_DATE`,
       [user_id, lab_id]
     );
-    const minutesUsedToday = parseInt(usageResult.rows[0]?.minutes_used || 0);
+    const committedMinutes = parseInt(usageResult.rows[0]?.minutes_used || 0);
+
+    // Add elapsed time of the currently active session (not yet written to lab_daily_usage)
+    const activeSession = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - starttime)) / 60 AS elapsed_minutes
+       FROM user_sessions
+       WHERE user_id=$1 AND labid=$2 AND isactive=true
+       ORDER BY starttime DESC LIMIT 1`,
+      [user_id, lab_id]
+    );
+    const activeMinutes = Math.ceil(parseFloat(activeSession.rows[0]?.elapsed_minutes || 0));
+    const minutesUsedToday = committedMinutes + activeMinutes;
 
     const hoursPerDay = await getHoursPerDay(lab_id, user_id, lab_type);
     const limitMinutes = hoursPerDay ? hoursPerDay * 60 : null;
@@ -191,4 +215,24 @@ const getDailyUsage = async (req, res) => {
   }
 };
 
-module.exports = { startLabSession, stopLabSession, getDailyUsage };
+// POST /heartbeat
+// Called every 30s by the frontend while the lab is running.
+// Stamps last_heartbeat so the backend cron can detect abandoned sessions.
+const heartbeatLabSession = async (req, res) => {
+  try {
+    const { session_id } = req.body;
+    if (!session_id) {
+      return res.status(400).json({ success: false, message: 'session_id is required' });
+    }
+    await pool.query(
+      `UPDATE user_sessions SET last_heartbeat = NOW() WHERE id = $1 AND isactive = true`,
+      [session_id]
+    );
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('heartbeatLabSession error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { startLabSession, stopLabSession, getDailyUsage, heartbeatLabSession };
