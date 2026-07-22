@@ -768,6 +768,20 @@ const updateUserRole = async (userId, role) => {
     return users;
   };
   
+  const getTreainersForSuperadmin = async()=>{
+     const [userResult,orgUserResult] = await Promise.all([
+      pool.query(userQueries.getAllUsers),
+      pool.query(userQueries.getAllOrgUsers)
+  ])
+
+     let users = [...userResult.rows, ...orgUserResult.rows];
+     users = users.filter(user => user.role === 'trainer');
+     console.log(users)
+     if (users.length === 0) throw new Error("No users found for this organization");
+  
+    return users;
+  }
+
   const deleteUsers = async (orgId, userIds) => {
     if (!Array.isArray(userIds) || userIds.length === 0)
       throw new Error("Invalid or missing userIds array");
@@ -1125,5 +1139,6 @@ module.exports = {
   bulkAddUser,
   userApprove,
   resetPassword,
-  getTrainersFromOrganization
+  getTrainersFromOrganization,
+  getTreainersForSuperadmin
  };

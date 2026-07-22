@@ -269,7 +269,6 @@ const approveOrRejectExtensionRequest = async(req,res)=>{
                     status,
                     type
         } = req.body;
-        console.log(req.body)
         if(!request_id  || !status ||!type){
             return res.status(400).send({
                 success:false,

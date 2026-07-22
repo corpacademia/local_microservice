@@ -420,6 +420,16 @@ const updateUserRole = async (req, res) => {
     }
   };
   
+  const getTreainersForSuperadmin = async (req, res) => {
+    try {
+      const users = await userServices.getTreainersForSuperadmin();
+      return res.status(200).send({ success: true, message: "Users retrieved successfully", data: users });
+    } catch (error) {
+      console.log("error",error)
+      return res.status(404).send({ success: false, message:"Error in getting user details",error: error.message });
+    }
+  };
+
   const deleteUsers = async (req, res) => {
     try {
       const { orgId, userIds } = req.body;
@@ -576,5 +586,6 @@ module.exports={
     uploadBulkUsers,
     userApprove,
     resetPassword,
-    getTrainersFromOrganization
+    getTrainersFromOrganization,
+    getTreainersForSuperadmin
 }

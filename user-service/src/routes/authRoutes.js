@@ -28,7 +28,8 @@ const {
     uploadBulkUsers,
     userApprove,
     resetPassword,
-    getTrainersFromOrganization
+    getTrainersFromOrganization,
+    getTreainersForSuperadmin
 } = require('../controllers/authController');
 
 //api router
@@ -82,6 +83,7 @@ router.get('/uploads/:filename', (req, res) => {
 });
 router.post('/send-verification-code',sendVerificationEmail);
 router.post('/verify-code',verifyEmailCode);
-router.post('/reset-password',resetPassword)
+router.post('/reset-password',resetPassword);
+router.get('/getTreainersForSuperadmin',getTreainersForSuperadmin);
 
  module.exports = router;
