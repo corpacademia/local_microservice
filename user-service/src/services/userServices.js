@@ -24,7 +24,7 @@ const ROLE_TO_FEATURE = {
   trainer: "trainers",
   labadmin: "labadmins"
 };
-
+console.log(process.env.SENDGRID_API,process.env.EMAIL_USER);
 const sendNotificationToMail = async (template, placeholders) => {
  
   // Load HTML template
@@ -586,11 +586,12 @@ try {
 
       // Send email
       const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
+       host: 'smtp.sendgrid.net',
+      port: 587,
+      auth: {
+        user: 'apikey',
+        pass: process.env.SENDGRID_API
+      }
       });
 
       const mailOptions = {
