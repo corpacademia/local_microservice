@@ -1594,94 +1594,88 @@ const getTransactionDetails = async (req, res) => {
 
 const exportTransactions = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, search, start_date, end_date } = req.query;
+    const { orgId, userId, status, search, start_date, end_date } = req.query;
 
-    const skip = (page - 1) * limit;
+    let query = `SELECT * FROM payments WHERE 1=1`;
+    const values = [];
 
-    // Build Stripe params (only supported ones)
-    let params = { limit: 100 }; // fetch more so filtering works
-    if (start_date && end_date) {
-      params.created = {
-        gte: Math.floor(new Date(start_date).getTime() / 1000),
-        lte: Math.floor(new Date(end_date).getTime() / 1000),
-      };
+    if (userId && userId !== 'undefined') {
+      values.push(userId.trim());
+      query += ` AND user_id = $${values.length}`;
+    } else if (orgId && orgId !== 'undefined') {
+      values.push(orgId.trim());
+      query += ` AND org_id = $${values.length}`;
     }
 
-    const paymentIntents = await stripe.paymentIntents.list(params);
-
-    // Transform
-    let transactions = await Promise.all(
-      paymentIntents.data.map(async (pi) => {
-        const charge = pi.latest_charge
-          ? await stripe.charges.retrieve(pi.latest_charge)
-          : null;
-
-        return {
-          id: pi.id,
-          customer: typeof pi.customer === "object" ? pi.customer?.name : pi.customer,
-          amount: (pi.amount_received / 100).toFixed(2),
-          currency: pi.currency.toUpperCase(),
-          status: pi.status,
-          created: new Date(pi.created * 1000).toLocaleString(),
-          receipt_url: charge?.receipt_url || "-",
-        };
-      })
-    );
-
-    // Apply backend filters
     if (status) {
-      transactions = transactions.filter((t) => t.status === status);
+      values.push(status);
+      query += ` AND status = $${values.length}`;
     }
+
     if (search) {
-      transactions = transactions.filter(
-        (t) =>
-          (t.customer && t.customer.toLowerCase().includes(search.toLowerCase())) ||
-          t.id.toLowerCase().includes(search.toLowerCase())
-      );
+      values.push(`%${search}%`);
+      query += ` AND (id::text ILIKE $${values.length} OR email ILIKE $${values.length})`;
     }
 
-    // Manual pagination
-    const paginated = transactions.slice(skip, skip + parseInt(limit));
+    if (start_date && end_date) {
+      values.push(start_date, end_date);
+      query += ` AND created_at BETWEEN $${values.length - 1} AND $${values.length}`;
+    }
 
-    // Generate PDF
-    const doc = new jsPDF();
-    doc.text(`Transactions Report (Page ${page})`, 14, 15);
+    query += ` ORDER BY created_at DESC`;
+    const result = await pool.query(query, values);
+    const transactions = result.rows;
+
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    doc.setFontSize(18);
+    doc.setTextColor(80, 60, 180);
+    doc.text('Transaction Report', 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on: ${today}`, 14, 26);
+    doc.text(`Total records: ${transactions.length}`, 14, 32);
 
     autoTable(doc, {
-      startY: 25,
+      startY: 40,
       margin: { left: 14, right: 14 },
-      tableWidth: "auto",
-      head: [["ID", "Customer", "Amount", "Currency", "Status", "Created", "Receipt"]],
-      body: paginated.map((t) => [
-        t.id,
-        t.customer || "-",
-        t.amount,
-        t.currency,
-        t.status,
-        t.created,
-        "", // empty, link added below
-      ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [52, 73, 94] },
-      didDrawCell: (data) => {
-        if (data.section === "body" && data.column.index === 6) {
-          const url = paginated[data.row.index].receipt_url;
-          if (url && url !== "-") {
-            doc.setTextColor(0, 0, 255);
-            doc.textWithLink("View Receipt", data.cell.x + 2, data.cell.y + 6, { url });
-            doc.setTextColor(0, 0, 0);
-          }
-        }
+      head: [['Transaction ID', 'Product / Description', 'Customer', 'Amount', 'Status', 'Date']],
+      body: transactions.map((t) => {
+        const amount = t.amount_paid ?? t.amount ?? 0;
+        const currency = (t.currency || 'USD').toUpperCase();
+        const amountStr = `${currency} ${Math.abs(Number(amount)).toFixed(2)}`;
+        const rawDesc = t.description || t.product_name || '';
+        const description = (!rawDesc || rawDesc.toLowerCase().includes('no description')) ? '—' : rawDesc;
+        const customer = t.email || t.customer_email || t.customer || '—';
+        const date = t.created_at
+          ? new Date(t.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+          : '—';
+        const statusLabel = t.status
+          ? t.status.charAt(0).toUpperCase() + t.status.slice(1).toLowerCase()
+          : '—';
+        return [t.id || '—', description, customer, amountStr, statusLabel, date];
+      }),
+      styles: { fontSize: 7.5, cellPadding: 3, overflow: 'linebreak' },
+      headStyles: { fillColor: [80, 60, 180], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 245, 255] },
+      columnStyles: {
+        0: { cellWidth: 68, fontSize: 7 },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 48 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 36 },
       },
     });
 
-    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "attachment; filename=transactions.pdf");
+    const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=transactions_${new Date().toISOString().split('T')[0]}.pdf`);
     res.send(pdfBuffer);
   } catch (error) {
-    console.error("Export transactions error:", error);
-    res.status(500).json({ error: "Failed to export transactions" });
+    console.error('Export transactions error:', error);
+    res.status(500).json({ success: false, message: 'Failed to export transactions' });
   }
 };
 // const userTransactions = async (req, res) => {

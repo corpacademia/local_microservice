@@ -59,6 +59,7 @@ const { createLab,
     updateSingleVMAwsLab,
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
+    getAllUserPurchasesForAdmin,
     getUserDashboardLabs,
     getAllOrganizationAssignedLabs,
     updateUserLabCompletedStatus,
@@ -197,12 +198,13 @@ router.patch('/notifications/:notificationId/read',markAsRead);
 router.patch('/notifications/:userId/read-all',markAllAsRead);
 router.delete('/notifications/:notificationId',deleteNotifications);
 router.post('/transactions', getTransactionDetails);
-router.get('/organization/:orgId/export',exportTransactions);
+router.get('/transactions/export', exportTransactions);
 router.get('/user/:userId/transactions', userTransactions);
 router.post('/setNotificationSettings/:userId',setUserNotificationSettings);
 router.get('/notifications/preferences/:userId',getUserNotificationSettings);
 router.post('/enroll',insertFreeLab);
 router.post('/getAllUserPurchasedLabs',getAllUserPurchasedLabs);
+router.get('/getAllUserPurchasesForAdmin', getAllUserPurchasesForAdmin);
 router.post('/getUserDashboardLabs',getUserDashboardLabs);
 router.get('/getOrgAssignedLabs/:orgId',getAllOrganizationAssignedLabs);
 router.get('/getAllLabs',getAllLabs);

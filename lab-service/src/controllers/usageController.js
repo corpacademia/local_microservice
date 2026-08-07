@@ -182,7 +182,8 @@ const getDailyUsage = async (req, res) => {
     const usageResult = await pool.query(
       `SELECT COALESCE(minutes_used, 0) AS minutes_used
        FROM lab_daily_usage
-       WHERE user_id=$1 AND lab_id=$2 AND usage_date=CURRENT_DATE`,
+       WHERE user_id=$1 AND lab_id=$2 AND usage_date=CURRENT_DATE
+       ORDER BY recent_time DESC LIMIT 1`,
       [user_id, lab_id]
     );
     const committedMinutes = parseInt(usageResult.rows[0]?.minutes_used || 0);

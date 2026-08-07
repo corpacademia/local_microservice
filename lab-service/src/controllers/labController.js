@@ -3,6 +3,7 @@ const labService = require('../services/labService');
 const path = require('path');
 const fs = require('fs');
 const cookie = require('cookie');
+const pool = require('../db/dbConfig');
 
 const uploadDir = path.join(__dirname, '../public/uploads');
 
@@ -455,6 +456,149 @@ const getUserPurchasedSinglvmLabs = async (req, res) => {
         });
     }
 }
+
+//get all user purchased labs (superadmin view — all users)
+const getAllUserPurchasesForAdmin = async (req, res) => {
+    try {
+        const result = await pool.query(`
+    /* -------------------- Single VM AWS -------------------- */
+    SELECT
+        p.labid,
+        p.user_id,
+        p.start_date,
+        p.completions_date AS end_date,
+        p.status,
+        p.duration::text,
+        'singlevm_aws' AS lab_type,
+        COALESCE(u.name, ou.name) AS user_name,
+        COALESCE(u.email, ou.email) AS user_email,
+        COALESCE(cl.cataloguename, cl.title, 'Lab') AS lab_title
+    FROM singlevm_aws_purchased_labs p
+    LEFT JOIN users u
+        ON u.id::text = p.user_id::text
+    LEFT JOIN organization_users ou
+        ON ou.id::text = p.user_id::text
+    LEFT JOIN createlab cl
+        ON cl.lab_id::text = p.labid::text
+
+    UNION ALL
+
+    /* -------------------- CloudSlice -------------------- */
+    SELECT
+        p.labid,
+        p.user_id,
+        p.start_date,
+        p.end_date,
+        p.status,
+        p.duration::text,
+        'cloudslice' AS lab_type,
+        COALESCE(u.name, ou.name) AS user_name,
+        COALESCE(u.email, ou.email) AS user_email,
+        COALESCE(csl.cataloguename, csl.title, 'Lab') AS lab_title
+    FROM cloudslice_purchased_labs p
+    LEFT JOIN users u
+        ON u.id::text = p.user_id::text
+    LEFT JOIN organization_users ou
+        ON ou.id::text = p.user_id::text
+    LEFT JOIN cloudslicelab csl
+        ON csl.labid::text = p.labid::text
+
+    UNION ALL
+
+    /* -------------------- Single VM Proxmox -------------------- */
+    SELECT
+        p.labid,
+        p.user_id,
+        p.startdate AS start_date,
+        p.enddate AS end_date,
+        p.status,
+        p.duration::text,
+        'singlevmproxmox' AS lab_type,
+        COALESCE(u.name, ou.name) AS user_name,
+        COALESCE(u.email, ou.email) AS user_email,
+        COALESCE(pl.cataloguename, pl.title, 'Lab') AS lab_title
+    FROM singlevmproxmox_purchased_labs p
+    LEFT JOIN users u
+        ON u.id::text = p.user_id::text
+    LEFT JOIN organization_users ou
+        ON ou.id::text = p.user_id::text
+    LEFT JOIN singlevmproxmox_lab pl
+        ON pl.labid::text = p.labid::text
+
+    UNION ALL
+
+    /* -------------------- VM Cluster Proxmox -------------------- */
+    SELECT
+        p.labid,
+        p.user_id,
+        p.startdate AS start_date,
+        p.enddate AS end_date,
+        p.status,
+        p.duration::text,
+        'vmclusterproxmox' AS lab_type,
+        COALESCE(u.name, ou.name) AS user_name,
+        COALESCE(u.email, ou.email) AS user_email,
+        COALESCE(pl.cataloguename, pl.title, 'Lab') AS lab_title
+    FROM proxmox_cluster_purchased p
+    LEFT JOIN users u
+        ON u.id::text = p.user_id::text
+    LEFT JOIN organization_users ou
+        ON ou.id::text = p.user_id::text
+    LEFT JOIN proxmoxcluster_lab pl
+        ON pl.labid::text = p.labid::text
+
+    UNION ALL
+
+    /* -------------------- Single VM Datacenter -------------------- */
+    SELECT
+        p.labid,
+        p.user_id,
+        p.startdate AS start_date,
+        p.enddate AS end_date,
+        p.status,
+        p.duration::text,
+        'singlevmdatacenter' AS lab_type,
+        COALESCE(u.name, ou.name) AS user_name,
+        COALESCE(u.email, ou.email) AS user_email,
+        COALESCE(dl.cataloguename, dl.title, 'Lab') AS lab_title
+    FROM singlevmdatacenter_purchased p
+    LEFT JOIN users u
+        ON u.id::text = p.user_id::text
+    LEFT JOIN organization_users ou
+        ON ou.id::text = p.user_id::text
+    LEFT JOIN singlevmdatacenter_lab dl
+        ON dl.lab_id::text = p.labid::text
+
+    UNION ALL
+
+    /* -------------------- VM Cluster Datacenter -------------------- */
+    SELECT
+        p.labid,
+        p.user_id,
+        p.startdate AS start_date,
+        p.enddate AS end_date,
+        p.status,
+        p.duration::text,
+        'vmclusterdatacenter' AS lab_type,
+        COALESCE(u.name, ou.name) AS user_name,
+        COALESCE(u.email, ou.email) AS user_email,
+        COALESCE(vcl.cataloguename, vcl.title, 'Lab') AS lab_title
+    FROM vmclusterdatacenter_purchased p
+    LEFT JOIN users u
+        ON u.id::text = p.user_id::text
+    LEFT JOIN organization_users ou
+        ON ou.id::text = p.user_id::text
+    LEFT JOIN vmclusterdatacenter_lab vcl
+        ON vcl.labid::text = p.labid::text
+
+    ORDER BY start_date DESC;
+`);
+        return res.status(200).send({ success: true, data: result.rows });
+    } catch (error) {
+        console.error('Error in getAllUserPurchasesForAdmin:', error);
+        return res.status(500).send({ success: false, message: 'Error fetching user purchases', error: error.message });
+    }
+};
 
 //get all user purchased labs
 
@@ -1932,6 +2076,7 @@ module.exports = {
     updateSingleVMAwsLab,
     getUserPurchasedSinglvmLabsOnLabId,
     getAllUserPurchasedLabs,
+    getAllUserPurchasesForAdmin,
     getUserDashboardLabs,
     getAllOrganizationAssignedLabs,
     getAllLabs,
